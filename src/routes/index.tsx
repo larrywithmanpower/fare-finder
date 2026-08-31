@@ -97,7 +97,7 @@ function LandingPage() {
             </p>
 
             <h1
-              className="fade-up text-daybreak font-display font-black text-5xl leading-[1.1] tracking-tight sm:text-7xl"
+              className="fade-up text-daybreak font-display font-black pb-3 text-5xl leading-[1.1] tracking-tight sm:text-7xl"
               style={{ animationDelay: "0.1s" }}
             >
               Flight Price Notifier
