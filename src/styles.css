@@ -181,3 +181,125 @@
   color: transparent;
   -webkit-text-fill-color: transparent;
 }
+
+/*
+  滾動進場
+  預設維持隱藏態，進入視窗時由 useScrollReveal 加上 is-revealed 才播動畫
+  以 data-reveal 的值決定進場語言，靠 animationDelay 做同組元素的階梯延遲
+*/
+@keyframes reveal-rise {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* 卡片：從散焦、下沉、略縮，浮上來對焦 */
+@keyframes reveal-card {
+  from {
+    opacity: 0;
+    transform: translateY(40px) scale(0.96);
+    filter: blur(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: blur(0);
+  }
+}
+
+/* 標題：像布幕由下往上揭開 */
+@keyframes reveal-mask {
+  from {
+    opacity: 0;
+    clip-path: inset(100% 0 0 0);
+    transform: translateY(22px);
+  }
+  to {
+    opacity: 1;
+    clip-path: inset(0 0 0 0);
+    transform: none;
+  }
+}
+
+/* 細線：從中間往兩端拉開 */
+@keyframes reveal-line {
+  from {
+    opacity: 0;
+    transform: scaleX(0);
+  }
+  to {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+}
+
+/* 序號：從放大模糊收斂成實體 */
+@keyframes reveal-numeral {
+  from {
+    opacity: 0;
+    transform: scale(1.35);
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: blur(0);
+  }
+}
+
+@layer base {
+  /*
+    隱藏態只能用 opacity
+    clip-path / scaleX(0) 會讓元素的可見區域變成 0, IntersectionObserver 就永遠不算它進入視窗
+    變形一律寫在關鍵影格的 from 裡
+  */
+  [data-reveal] {
+    opacity: 0;
+    will-change: transform, opacity;
+  }
+
+  [data-reveal="mask"] {
+    display: block;
+    /* 多留一點下緣空間, 避免 clip-path 切到下伸筆畫 */
+    padding-bottom: 0.12em;
+  }
+
+  [data-reveal="line"] {
+    transform-origin: center;
+  }
+
+  [data-reveal="rise"].is-revealed {
+    animation: reveal-rise 0.8s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  }
+
+  [data-reveal="card"].is-revealed {
+    animation: reveal-card 0.95s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  }
+
+  [data-reveal="mask"].is-revealed {
+    animation: reveal-mask 1s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  }
+
+  [data-reveal="line"].is-revealed {
+    animation: reveal-line 1.1s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  }
+
+  [data-reveal="numeral"].is-revealed {
+    animation: reveal-numeral 0.9s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  }
+
+  /* 尊重系統的減少動態設定：全部直接顯示 */
+  @media (prefers-reduced-motion: reduce) {
+    [data-reveal] {
+      opacity: 1;
+      transform: none;
+      clip-path: none;
+      animation: none;
+    }
+  }
+}

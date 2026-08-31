@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Plane, Bell, CircleSlash } from "lucide-react";
+import { useScrollReveal } from "@/hooks/use-scroll-reveal";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -63,6 +64,8 @@ const steps = [
 ];
 
 function LandingPage() {
+  useScrollReveal();
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="mx-auto flex max-w-6xl items-center justify-between px-6 py-6">
@@ -143,14 +146,25 @@ function LandingPage() {
         <section className="mx-auto max-w-6xl px-6 py-24 sm:py-32">
           <div className="mb-14 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
+              <p
+                data-reveal="rise"
+                className="text-xs uppercase tracking-[0.2em] text-muted-foreground"
+              >
                 What it does
               </p>
-              <h2 className="font-display mt-3 text-3xl tracking-tight sm:text-4xl">
+              <h2
+                data-reveal="mask"
+                className="font-display mt-3 text-3xl tracking-tight sm:text-4xl"
+                style={{ animationDelay: "0.1s" }}
+              >
                 替你守著票價，直到它便宜為止
               </h2>
             </div>
-            <p className="max-w-sm text-sm leading-relaxed text-muted-foreground">
+            <p
+              data-reveal="rise"
+              className="max-w-sm text-sm leading-relaxed text-muted-foreground"
+              style={{ animationDelay: "0.25s" }}
+            >
               不用每天打開比價網站重刷一次，把航線交給我們就好。
             </p>
           </div>
@@ -159,14 +173,19 @@ function LandingPage() {
             {features.map((feature, i) => (
               <article
                 key={feature.title}
-                className="fade-up surface-sheen rounded-2xl border border-border bg-card p-7 transition-colors hover:border-primary/40"
-                style={{ animationDelay: `${0.2 + i * 0.12}s` }}
+                data-reveal="card"
+                className="surface-sheen rounded-2xl border border-border bg-card p-7 transition-colors hover:border-primary/40"
+                style={{ animationDelay: `${i * 0.14}s` }}
               >
                 <div className="flex items-start justify-between">
                   <div className="inline-flex rounded-xl bg-accent p-3 text-primary">
                     <feature.icon className="h-5 w-5" />
                   </div>
-                  <span className="font-display text-2xl text-muted-foreground/50">
+                  <span
+                    data-reveal="numeral"
+                    className="font-display text-2xl text-muted-foreground/50"
+                    style={{ animationDelay: `${0.35 + i * 0.14}s` }}
+                  >
                     {String(i + 1).padStart(2, "0")}
                   </span>
                 </div>
@@ -190,10 +209,17 @@ function LandingPage() {
 
         <section className="border-t border-border">
           <div className="mx-auto max-w-6xl px-6 py-24 sm:py-28">
-            <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
+            <p
+              data-reveal="rise"
+              className="text-xs uppercase tracking-[0.2em] text-muted-foreground"
+            >
               How it works
             </p>
-            <h2 className="font-display mt-3 text-3xl tracking-tight sm:text-4xl">
+            <h2
+              data-reveal="mask"
+              className="font-display mt-3 text-3xl tracking-tight sm:text-4xl"
+              style={{ animationDelay: "0.1s" }}
+            >
               三步就好
             </h2>
 
@@ -201,20 +227,40 @@ function LandingPage() {
               {steps.map((step, i) => (
                 <li
                   key={step.title}
-                  className="fade-up relative sm:border-l sm:border-border sm:px-8 sm:first:border-l-0 sm:first:pl-0 sm:last:pr-0"
-                  style={{ animationDelay: `${0.15 + i * 0.12}s` }}
+                  className="relative sm:border-l sm:border-border sm:px-8 sm:first:border-l-0 sm:first:pl-0 sm:last:pr-0"
                 >
-                  <span className="font-display text-sm text-horizon">
+                  <span
+                    data-reveal="numeral"
+                    className="font-display block text-sm text-horizon"
+                    style={{ animationDelay: `${i * 0.18}s` }}
+                  >
                     Step {String(i + 1).padStart(2, "0")}
                   </span>
-                  <div className="horizon-line mt-4 mb-6 h-px opacity-40" aria-hidden />
-                  <h3 className="font-display text-2xl tracking-tight">
+                  <div
+                    data-reveal="line"
+                    className="horizon-line mt-4 mb-6 h-px opacity-40"
+                    style={{ animationDelay: `${0.2 + i * 0.18}s` }}
+                    aria-hidden
+                  />
+                  <h3
+                    data-reveal="mask"
+                    className="font-display text-2xl tracking-tight"
+                    style={{ animationDelay: `${0.35 + i * 0.18}s` }}
+                  >
                     {step.title}
                   </h3>
-                  <p className="mt-1 text-xs uppercase tracking-[0.14em] text-muted-foreground">
+                  <p
+                    data-reveal="rise"
+                    className="mt-1 text-xs uppercase tracking-[0.14em] text-muted-foreground"
+                    style={{ animationDelay: `${0.5 + i * 0.18}s` }}
+                  >
                     {step.subtitle}
                   </p>
-                  <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
+                  <p
+                    data-reveal="rise"
+                    className="mt-4 text-sm leading-relaxed text-muted-foreground"
+                    style={{ animationDelay: `${0.6 + i * 0.18}s` }}
+                  >
                     {step.description}
                   </p>
                 </li>
@@ -229,13 +275,20 @@ function LandingPage() {
             aria-hidden
           />
           <div className="relative mx-auto max-w-3xl px-6 py-24 text-center sm:py-28">
-            <h2 className="font-display font-black text-4xl leading-tight tracking-tight sm:text-5xl">
+            <h2
+              data-reveal="mask"
+              className="font-display font-black text-4xl leading-tight tracking-tight sm:text-5xl"
+            >
               下一趟旅程，等它降價再出發
             </h2>
-            <p className="mt-5 text-base text-muted-foreground">
+            <p
+              data-reveal="rise"
+              className="mt-5 text-base text-muted-foreground"
+              style={{ animationDelay: "0.2s" }}
+            >
               Set your first route tonight — we will watch the fare while you sleep.
             </p>
-            <div className="mt-10">
+            <div data-reveal="rise" className="mt-10" style={{ animationDelay: "0.35s" }}>
               <Link
                 to="/auth"
                 className="inline-flex items-center justify-center rounded-xl border border-primary/50 px-9 py-3.5 text-base font-medium text-primary transition-colors hover:bg-primary/10"
