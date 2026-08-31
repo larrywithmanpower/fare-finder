@@ -32,30 +32,38 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-ring-offset-background: var(--background);
-  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  /* 品牌延伸色：晨曦青，用於次要強調 */
+  --color-horizon: var(--horizon);
+  --font-sans: "Inter", "Noto Sans TC", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-display: "Playfair Display", "Noto Serif TC", ui-serif, Georgia, serif;
 }
 
+/*
+  Silent Horizon 夜航配色
+  背景：深夜藍黑；主色：暖金（機艙燈 / 日出前的地平線）；輔色：晨曦青
+*/
 :root {
-  --radius: 0.75rem;
-  --background: oklch(0.13 0.015 285);
-  --foreground: oklch(0.96 0.01 280);
-  --card: oklch(0.17 0.02 285);
-  --card-foreground: oklch(0.96 0.01 280);
-  --popover: oklch(0.17 0.02 285);
-  --popover-foreground: oklch(0.96 0.01 280);
-  --primary: oklch(0.63 0.21 293);
-  --primary-foreground: oklch(0.98 0.005 290);
-  --secondary: oklch(0.21 0.025 285);
-  --secondary-foreground: oklch(0.96 0.01 280);
-  --muted: oklch(0.21 0.025 285);
-  --muted-foreground: oklch(0.68 0.03 285);
-  --accent: oklch(0.25 0.05 293);
-  --accent-foreground: oklch(0.92 0.05 293);
-  --destructive: oklch(0.64 0.21 25);
+  --radius: 0.625rem;
+  --background: oklch(0.145 0.022 258);
+  --foreground: oklch(0.95 0.008 250);
+  --card: oklch(0.19 0.026 258);
+  --card-foreground: oklch(0.95 0.008 250);
+  --popover: oklch(0.19 0.026 258);
+  --popover-foreground: oklch(0.95 0.008 250);
+  --primary: oklch(0.8 0.135 82);
+  --primary-foreground: oklch(0.18 0.045 70);
+  --secondary: oklch(0.23 0.028 258);
+  --secondary-foreground: oklch(0.95 0.008 250);
+  --muted: oklch(0.23 0.028 258);
+  --muted-foreground: oklch(0.7 0.022 255);
+  --accent: oklch(0.27 0.05 80);
+  --accent-foreground: oklch(0.88 0.1 85);
+  --destructive: oklch(0.64 0.19 25);
   --destructive-foreground: oklch(0.98 0.005 25);
-  --border: oklch(1 0 0 / 9%);
+  --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 14%);
-  --ring: oklch(0.63 0.21 293);
+  --ring: oklch(0.8 0.135 82);
+  --horizon: oklch(0.74 0.1 205);
 }
 
 @layer base {
@@ -69,12 +77,18 @@
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
   }
+
+  /* 襯線標題：英文走 Playfair Display、中文走 Noto Serif TC，預設粗體撐住海報感 */
+  .font-display {
+    font-family: var(--font-display);
+    font-weight: 700;
+  }
 }
 
 @utility fade-up {
   opacity: 0;
   transform: translateY(16px);
-  animation: fade-up 0.7s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation: fade-up 0.8s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
 @keyframes fade-up {
@@ -84,12 +98,86 @@
   }
 }
 
+/* 主要按鈕的暖金光暈 */
 @utility glow-primary {
-  box-shadow: 0 0 0 1px oklch(0.63 0.21 293 / 30%), 0 8px 32px -8px oklch(0.63 0.21 293 / 45%);
+  box-shadow:
+    0 0 0 1px oklch(0.8 0.135 82 / 35%),
+    0 10px 40px -10px oklch(0.8 0.135 82 / 45%);
 }
 
+/*
+  夜航背景：上方冷藍夜空 + 下方一道暖金地平線
+  疊在 hero 或整頁最外層皆可
+*/
 @utility hero-glow {
+  position: relative;
   background:
-    radial-gradient(60rem 30rem at 50% -10%, oklch(0.63 0.21 293 / 18%), transparent 60%),
-    radial-gradient(40rem 24rem at 85% 20%, oklch(0.55 0.18 310 / 10%), transparent 60%);
+    radial-gradient(70rem 34rem at 50% 118%, oklch(0.8 0.135 82 / 20%), transparent 62%),
+    radial-gradient(48rem 26rem at 12% -6%, oklch(0.74 0.1 205 / 12%), transparent 60%),
+    radial-gradient(52rem 30rem at 88% 4%, oklch(0.55 0.09 268 / 16%), transparent 62%);
+}
+
+/* 極細地平線：一條中間亮、兩端淡出的水平線 */
+@utility horizon-line {
+  background-image: linear-gradient(
+    90deg,
+    transparent,
+    oklch(0.8 0.135 82 / 55%) 35%,
+    oklch(0.88 0.12 88 / 80%) 50%,
+    oklch(0.8 0.135 82 / 55%) 65%,
+    transparent
+  );
+}
+
+/* 星點：兩層不同密度的細點，營造夜空 */
+@utility starfield {
+  background-image:
+    radial-gradient(1px 1px at 12% 22%, oklch(1 0 0 / 34%), transparent),
+    radial-gradient(1px 1px at 28% 68%, oklch(1 0 0 / 22%), transparent),
+    radial-gradient(1px 1px at 41% 12%, oklch(1 0 0 / 30%), transparent),
+    radial-gradient(1px 1px at 57% 44%, oklch(1 0 0 / 18%), transparent),
+    radial-gradient(1.5px 1.5px at 68% 18%, oklch(0.9 0.08 88 / 40%), transparent),
+    radial-gradient(1px 1px at 79% 60%, oklch(1 0 0 / 26%), transparent),
+    radial-gradient(1px 1px at 91% 30%, oklch(1 0 0 / 20%), transparent),
+    radial-gradient(1.5px 1.5px at 8% 52%, oklch(0.9 0.08 88 / 30%), transparent);
+}
+
+/* 卡片內側的一道細微上緣高光，讓表面有厚度 */
+@utility surface-sheen {
+  box-shadow:
+    inset 0 1px 0 0 oklch(1 0 0 / 6%),
+    0 1px 2px 0 oklch(0 0 0 / 30%);
+}
+
+/* 慢速呼吸，用在地平線光帶 */
+@utility breathe {
+  animation: breathe 6s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/*
+  破曉漸層文字：晨曦青 → 近白 → 暖金
+  只用在主標題這種稀缺位置，所有色階都保持高明度以維持可讀性
+*/
+@utility text-daybreak {
+  background-image: linear-gradient(
+    100deg,
+    oklch(0.86 0.075 205) 0%,
+    oklch(0.97 0.008 250) 36%,
+    oklch(0.94 0.075 90) 66%,
+    oklch(0.83 0.13 80) 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
 }
