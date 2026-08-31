@@ -1,15 +1,16 @@
-// @lovable.dev/vite-tanstack-config already includes the following — do NOT add them manually
-// or the app will break with duplicate plugins:
-//   - TanStack devtools (dev-only, first), tanstackStart, viteReact, tailwindcss, tsConfigPaths,
-//     nitro (build-only using cloudflare as a default target), VITE_* env injection, @ path alias,
-//     React/TanStack dedupe, error logger plugins, and sandbox detection (port/host/strictPort).
-// You can pass additional config via defineConfig({ vite: { ... }, etc... }) if needed.
-import { defineConfig } from "@lovable.dev/vite-tanstack-config";
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
+import tsConfigPaths from "vite-tsconfig-paths";
+import path from "path";
 
+// 純 Vite + React SPA，靜態輸出到 dist/，供 Vercel 部署
+// 原本用 @lovable.dev/vite-tanstack-config（TanStack Start + nitro，打包目標是 Cloudflare Workers），
+// 直接上 Vercel 會 build 成功但每個路由 404
 export default defineConfig({
-  tanstackStart: {
-    // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
-    // nitro/vite builds from this
-    server: { entry: "server" },
+  plugins: [react(), tailwindcss(), tsConfigPaths()],
+  resolve: {
+    alias: { "@": path.resolve(__dirname, "./src") },
   },
+  server: { host: "::", port: 8080 },
 });
