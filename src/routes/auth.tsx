@@ -37,13 +37,19 @@ function AuthPage() {
         if (error) throw error;
         navigate({ to: "/dashboard" });
       } else {
-        const { error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
           email,
           password,
           options: { emailRedirectTo: window.location.origin },
         });
         if (error) throw error;
-        setNotice("Check your email to confirm your account, then sign in.");
+        // 專案關掉了 Confirm email，註冊當下就會拿到 session，直接進 dashboard
+        // 之後若把 Confirm email 開回來，signUp 不會給 session，才顯示收信提示
+        if (data.session) {
+          navigate({ to: "/dashboard" });
+        } else {
+          setNotice("Check your email to confirm your account, then sign in.");
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
