@@ -266,7 +266,7 @@ function PlanCard({
           <input
             type="number"
             min={1}
-            step={100}
+            step="any"
             required
             disabled={locked}
             value={inputValue}
