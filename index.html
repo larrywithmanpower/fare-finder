@@ -22,6 +22,18 @@
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
     />
+    <!-- 暫時性: Travelpayouts Drive 安裝驗證用, 通過後立即移除 -->
+    <script>
+      // 只在首頁載入, /auth 與 /dashboard 不掛
+      // 有登入 session 的頁面不讓第三方腳本進來, Supabase token 存在 localStorage 同源就讀得到
+      if (window.location.pathname === "/") {
+        var tpDrive = document.createElement("script");
+        tpDrive.async = 1;
+        tpDrive.setAttribute("data-cmp-ab", "2");
+        tpDrive.src = "https://emrld.ltd/NTcyNzQ0.js?t=572744";
+        document.head.appendChild(tpDrive);
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>
