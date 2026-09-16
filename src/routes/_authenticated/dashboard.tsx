@@ -57,6 +57,8 @@ type CardState = {
   /** 還沒付費時，主要按鈕的文字 */
   cta: string | null;
   note: string | null;
+  /** 按下 cta 之前一定要讓使用者看到的提醒 */
+  warning?: string;
 };
 
 function cardState(sub: Subscription): CardState {
@@ -96,6 +98,9 @@ function cardState(sub: Subscription): CardState {
       note: sub.current_period_end_date
         ? `不會再扣款，${sub.current_period_end_date} 前仍然會通知你`
         : "不會再扣款，本期結束前仍然會通知你",
+      // 綠界的定期定額約取消後無法復原，「恢復」其實是重新簽一張新的約
+      warning:
+        "恢復會重新扣一次 NT$300 並開始新的一期，本期剩下的天數不折抵。",
     };
   }
   return {
@@ -598,6 +603,9 @@ function RouteCard({
 
       {state.note && (
         <p className="mt-2 text-xs text-muted-foreground">{state.note}</p>
+      )}
+      {state.warning && (
+        <p className="mt-1.5 text-xs text-horizon">{state.warning}</p>
       )}
 
       <div className="mt-5 flex flex-wrap items-center gap-3">
