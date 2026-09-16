@@ -12,6 +12,7 @@ import {
   XCircle,
   Plus,
   ArrowLeftRight,
+  X,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -189,6 +190,11 @@ function DashboardPage() {
 
   const pricesQuery = usePrices(subscriptions.map((item) => item.route));
 
+  const activated = paidRoute
+    ? subscriptions.find((item) => item.route === paidRoute)
+        ?.subscription_status === "active"
+    : !subscriptions.some((i) => i.subscription_status === "pending_payment");
+
   // 剛付款的那條變成 active 就收工
   useEffect(() => {
     if (!waiting || !subscriptionsQuery.isFetched) return;
@@ -209,10 +215,12 @@ function DashboardPage() {
     return () => clearTimeout(timer);
   }, [waiting]);
 
-  const activated = paidRoute
-    ? subscriptions.find((item) => item.route === paidRoute)
-        ?.subscription_status === "active"
-    : !subscriptions.some((i) => i.subscription_status === "pending_payment");
+  // 啟用成功的橫幅看過就好，10 秒後自己收起來；失敗的留著等使用者處理
+  useEffect(() => {
+    if (purchase !== "success" || waiting || !activated) return;
+    const timer = setTimeout(() => setPurchase(null), 10_000);
+    return () => clearTimeout(timer);
+  }, [purchase, waiting, activated]);
 
   return (
     <div className="relative min-h-screen bg-background text-foreground">
@@ -269,32 +277,42 @@ function DashboardPage() {
           </div>
 
           {purchase === "success" && (
-            <p className="fade-up mt-10 flex items-start gap-2.5 rounded-lg border border-primary/40 bg-accent px-4 py-3 text-sm text-primary">
+            <Banner tone="ok" onClose={() => setPurchase(null)}>
               {waiting ? (
                 <>
                   <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin" />
-                  <span>付款完成，正在啟用你的訂閱…</span>
+                  <span>
+                    {paidRoute ? `${routeLabel(paidRoute)} ` : ""}
+                    付款完成，正在啟用…
+                  </span>
                 </>
               ) : activated ? (
                 <>
                   <Check className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span>訂閱已啟用，我們開始為你盯票價了。</span>
+                  <span>
+                    {paidRoute ? `${routeLabel(paidRoute)} ` : ""}
+                    訂閱已啟用，我們開始為你盯票價了。
+                  </span>
                 </>
               ) : (
                 <>
                   <Clock className="mt-0.5 h-4 w-4 shrink-0" />
                   <span>
-                    付款完成，但還沒收到綠界的確認。重新整理看看，如果幾分鐘後還是沒啟用再跟我們聯絡。
+                    {paidRoute ? `${routeLabel(paidRoute)} ` : ""}
+                    付款完成，但還沒收到綠界的確認。稍後重新整理看看。
                   </span>
                 </>
               )}
-            </p>
+            </Banner>
           )}
           {purchase === "failed" && (
-            <p className="fade-up mt-10 flex items-start gap-2.5 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            <Banner tone="bad" onClose={() => setPurchase(null)}>
               <XCircle className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>付款沒有完成，這條航線還沒開始通知你。可以再按一次「完成付款」。</span>
-            </p>
+              <span>
+                {paidRoute ? `${routeLabel(paidRoute)} ` : ""}
+                付款沒有完成，還沒開始通知你。可以再按一次「完成付款」。
+              </span>
+            </Banner>
           )}
 
           <section
@@ -376,6 +394,37 @@ function DashboardPage() {
           </section>
         </main>
       </div>
+    </div>
+  );
+}
+
+/** 頁面上方的提示條，一律可以手動關掉 */
+function Banner({
+  tone,
+  onClose,
+  children,
+}: {
+  tone: "ok" | "bad";
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      className={`fade-up mt-10 flex items-start gap-2.5 rounded-lg border px-4 py-3 text-sm ${
+        tone === "ok"
+          ? "border-primary/40 bg-accent text-primary"
+          : "border-destructive/40 bg-destructive/10 text-destructive"
+      }`}
+    >
+      {children}
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="關閉這則訊息"
+        className="ml-auto shrink-0 rounded p-0.5 opacity-60 transition-opacity hover:opacity-100"
+      >
+        <X className="h-4 w-4" />
+      </button>
     </div>
   );
 }
