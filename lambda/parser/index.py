@@ -163,6 +163,9 @@ def handler(event, context):
             "email": sub["email"],
             "route": route,
             "plan_name": sub.get("plan_name") or plan_name,
+            # 中文城市名存在訂閱列上, 通知信直接用, 不必再維護一份對照表
+            "origin_name": sub.get("origin_name"),
+            "destination_name": sub.get("destination_name"),
             "target_price": float(target),
             "cheapest": cheapest,
         }

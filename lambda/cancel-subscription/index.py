@@ -150,6 +150,7 @@ def handler(event, context):
             "event_type": "cancel",
             "email": email,
             "route": route,
+            "route_label": row.get("plan_name"),
             "current_period_end_date": end_date,
         }, ensure_ascii=False),
     )

@@ -12,6 +12,7 @@ import hashlib
 import html
 import json
 import os
+import re
 import secrets as pysecrets
 import urllib.parse
 from datetime import datetime, timedelta, timezone
@@ -19,11 +20,43 @@ from decimal import Decimal, InvalidOperation
 
 import boto3
 
-# 兩個固定方案, 寫死不另外開表
-PLANS = {
-    "tokyo": {"origin": "TPE", "destination": "TYO", "label": "台北 ✈ 東京"},
-    "seoul": {"origin": "TPE", "destination": "SEL", "label": "台北 ✈ 首爾"},
+# 可訂閱的城市白名單（IATA「城市」代碼，不是機場代碼: 要 TYO 不要 NRT）
+# ⚠️ 前端 src/lib/cities.ts 是同一份, 加城市要兩邊都加
+CITIES = {
+    "TPE": "台北", "KHH": "高雄", "RMQ": "台中",
+    "TYO": "東京", "OSA": "大阪", "NGO": "名古屋",
+    "FUK": "福岡", "CTS": "札幌", "OKA": "沖繩",
+    "SEL": "首爾", "PUS": "釜山",
+    "HKG": "香港", "MFM": "澳門", "SHA": "上海",
+    "BJS": "北京", "CAN": "廣州", "CTU": "成都",
+    "BKK": "曼谷", "CNX": "清邁", "HKT": "普吉島",
+    "SIN": "新加坡", "KUL": "吉隆坡", "MNL": "馬尼拉", "CEB": "宿霧",
+    "SGN": "胡志明市", "HAN": "河內", "DAD": "峴港",
+    "DPS": "峇里島", "JKT": "雅加達",
+    "DEL": "德里", "BOM": "孟買", "DXB": "杜拜", "DOH": "杜哈", "IST": "伊斯坦堡",
+    "LON": "倫敦", "PAR": "巴黎", "AMS": "阿姆斯特丹", "FRA": "法蘭克福",
+    "MUC": "慕尼黑", "ZRH": "蘇黎世", "VIE": "維也納", "PRG": "布拉格",
+    "ROM": "羅馬", "BCN": "巴塞隆納", "MAD": "馬德里",
+    "NYC": "紐約", "LAX": "洛杉磯", "SFO": "舊金山", "SEA": "西雅圖",
+    "CHI": "芝加哥", "YVR": "溫哥華", "YTO": "多倫多",
+    "SYD": "雪梨", "MEL": "墨爾本", "AKL": "奧克蘭",
 }
+
+# M1/M2 早期的固定方案名, 舊前端還可能送上來, 對應到城市代碼就好
+LEGACY_PLANS = {"tokyo": ("TPE", "TYO"), "seoul": ("TPE", "SEL")}
+
+
+IATA_RE = re.compile(r"^[A-Z]{3}$")
+
+
+def route_label(origin, destination):
+    """清單內的給中文名, 使用者自己打的代碼就原樣顯示"""
+    return "%s ✈ %s" % (CITIES.get(origin, origin), CITIES.get(destination, destination))
+
+
+def valid_city(code):
+    """清單是為了好選跟顯示中文, 不是限制。任何合法的 IATA 三碼都放行"""
+    return bool(IATA_RE.match(code))
 
 API_BASE = os.environ.get("API_BASE", "https://9fj5twb7pd.execute-api.us-east-1.amazonaws.com")
 CASHIER_STAGE = "https://payment-stage.ecpay.com.tw/Cashier/AioCheckOut/V5"
@@ -114,7 +147,7 @@ def _still_served(row):
     return False
 
 
-def _checkout_form(conf, trade_no, email, route, plan):
+def _checkout_form(conf, trade_no, email, route, label):
     """組定期定額參數 + 算 CheckMacValue + 回自動送出的 HTML"""
     amount = str(int(conf.get("amount", "300")))
     params = {
@@ -124,7 +157,7 @@ def _checkout_form(conf, trade_no, email, route, plan):
         "PaymentType": "aio",
         "TotalAmount": amount,
         "TradeDesc": "機票降價通知月訂閱",
-        "ItemName": "機票降價通知 月訂閱 %s" % plan["label"],
+        "ItemName": "機票降價通知 月訂閱 %s" % label,
         "ReturnURL": API_BASE + "/ecpay-return",
         "ChoosePayment": "Credit",
         "EncryptType": "1",
@@ -165,13 +198,22 @@ def handler(event, context):
         return _resp_json(400, {"error": "body 不是合法的 JSON"})
 
     email = (body.get("email") or "").strip().lower()
-    plan_name = (body.get("plan_name") or "").strip().lower()
     raw_price = body.get("target_price")
+
+    # 新前端送 origin/destination; 舊前端送 plan_name, 兩種都接
+    origin = (body.get("origin") or "").strip().upper()
+    destination = (body.get("destination") or "").strip().upper()
+    if not origin or not destination:
+        legacy = LEGACY_PLANS.get((body.get("plan_name") or "").strip().lower())
+        if legacy:
+            origin, destination = legacy
 
     if not email or "@" not in email:
         return _resp_json(400, {"error": "email 必填"})
-    if plan_name not in PLANS:
-        return _resp_json(400, {"error": "plan_name 必須是 %s 其中之一" % sorted(PLANS)})
+    if not valid_city(origin) or not valid_city(destination):
+        return _resp_json(400, {"error": "出發地與目的地要填 IATA 三碼城市代碼, 例如 TPE / LON"})
+    if origin == destination:
+        return _resp_json(400, {"error": "出發地與目的地不能相同"})
 
     try:
         target_price = Decimal(str(raw_price))
@@ -180,21 +222,26 @@ def handler(event, context):
     if target_price <= 0:
         return _resp_json(400, {"error": "target_price 必須大於 0"})
 
-    plan = PLANS[plan_name]
-    route = "%s-%s" % (plan["origin"], plan["destination"])
+    route = "%s-%s" % (origin, destination)
+    label = route_label(origin, destination)
     now = datetime.now(timezone.utc).isoformat()
 
     existing = TABLE.get_item(Key={"email": email, "route": route}).get("Item") or {}
 
     common_set = (
         "plan_name = :p, origin = :o, destination = :d, "
+        "origin_name = :on, destination_name = :dn, "
         "target_price = :t, currency = :c, updated_at = :u, "
         "created_at = if_not_exists(created_at, :u)"
     )
     common_values = {
-        ":p": plan_name,
-        ":o": plan["origin"],
-        ":d": plan["destination"],
+        # plan_name 從 M2.5 起存的是中文航線名（"台北 ✈ 倫敦"）,
+        # 這樣通知信不用另外維護一份 route -> 中文 的對照表
+        ":p": label,
+        ":o": origin,
+        ":d": destination,
+        ":on": CITIES.get(origin, origin),
+        ":dn": CITIES.get(destination, destination),
         ":t": target_price,
         ":c": "TWD",
         ":u": now,
@@ -214,7 +261,7 @@ def handler(event, context):
             "updated_only": True,
             "email": email,
             "route": route,
-            "plan_name": plan_name,
+            "plan_name": label,
             "target_price": float(target_price),
             "currency": "TWD",
             "subscription_status": existing.get("subscription_status"),
@@ -237,5 +284,5 @@ def handler(event, context):
     return {
         "statusCode": 200,
         "headers": CORS_HTML,
-        "body": _checkout_form(conf, trade_no, email, route, plan),
+        "body": _checkout_form(conf, trade_no, email, route, label),
     }

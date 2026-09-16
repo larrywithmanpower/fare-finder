@@ -31,7 +31,11 @@ def get_resend():
     return _secret_cache
 
 
-def route_label(route):
+def route_label(msg):
+    """中文航線名的三層來源: 訊息 -> 舊對照表 -> 直接顯示代碼"""
+    if msg.get("route_label"):
+        return msg["route_label"]
+    route = msg["route"]
     origin, dest = ROUTE_LABELS.get(route, (route.split("-")[0], route.split("-")[-1]))
     return "%s ✈ %s" % (origin, dest)
 
@@ -49,7 +53,7 @@ def _shell(inner):
 
 
 def render_welcome(msg):
-    label = route_label(msg["route"])
+    label = route_label(msg)
     end = msg.get("current_period_end_date", "")
     amount = msg.get("amount", "300")
     subject = "訂閱成功：%s 開始為你盯票價" % label
@@ -76,7 +80,7 @@ def render_welcome(msg):
 
 
 def render_cancel(msg):
-    label = route_label(msg["route"])
+    label = route_label(msg)
     end = msg.get("current_period_end_date", "")
     subject = "已取消訂閱：%s" % label
     html = _shell(

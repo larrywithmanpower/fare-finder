@@ -20,6 +20,8 @@ SECRETS = boto3.client("secretsmanager")
 UA = "Mozilla/5.0 (compatible; flight-price-notifier/1.0)"
 RESEND_API = "https://api.resend.com/emails"
 
+# 中文城市名優先用訊息裡帶的（訂閱時就寫進 DynamoDB）,
+# 舊訊息沒有才退回這張小表, 再不行就直接顯示代碼
 ROUTE_LABELS = {
     "TPE-TYO": ("台北", "東京"),
     "TPE-SEL": ("台北", "首爾"),
@@ -43,9 +45,11 @@ def _env_num(name, default):
         return Decimal(str(default))
 
 
-def route_label(route):
-    origin, dest = ROUTE_LABELS.get(route, (route.split("-")[0], route.split("-")[-1]))
-    return origin, dest
+def route_label(msg):
+    """中文城市名的三層來源: 訊息 -> 舊對照表 -> 直接顯示代碼"""
+    route = msg["route"]
+    fallback = ROUTE_LABELS.get(route, (route.split("-")[0], route.split("-")[-1]))
+    return (msg.get("origin_name") or fallback[0], msg.get("destination_name") or fallback[1])
 
 
 def _ddmm(iso_string):
@@ -72,13 +76,13 @@ def booking_url(fare, route, marker=None):
     return url
 
 
-def subject(fare, route):
-    origin, dest = route_label(route)
+def subject(fare, names):
+    origin, dest = names
     return f"✈️ {origin} → {dest} 降價通知！NT${int(fare['price']):,} 已達標"
 
 
-def render_html(fare, route, target_price, url, usd=None):
-    origin, dest = route_label(route)
+def render_html(fare, names, target_price, url, usd=None):
+    origin, dest = names
     usd_line = ""
     if usd:
         usd_line = f'<p style="margin:4px 0 0;color:#8b8b8b;font-size:14px;">約 US${int(usd["price"]):,}</p>'
@@ -102,8 +106,8 @@ def render_html(fare, route, target_price, url, usd=None):
 </div>"""
 
 
-def render_text(fare, route, target_price, url, usd=None):
-    origin, dest = route_label(route)
+def render_text(fare, names, target_price, url, usd=None):
+    origin, dest = names
     lines = [
         f"{origin} → {dest} 降價了",
         "",
@@ -205,11 +209,12 @@ def handle_record(record, cfg):
 
     marker = cfg.get("marker")
     url = booking_url(fare, route, marker)
-    html = render_html(fare, route, target_price, url, usd)
-    text = render_text(fare, route, target_price, url, usd)
+    names = route_label(message)
+    html = render_html(fare, names, target_price, url, usd)
+    text = render_text(fare, names, target_price, url, usd)
 
     try:
-        result = send_email(cfg, email, subject(fare, route), html, text)
+        result = send_email(cfg, email, subject(fare, names), html, text)
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", "replace")[:300]
         if exc.code in (429,) or exc.code >= 500:

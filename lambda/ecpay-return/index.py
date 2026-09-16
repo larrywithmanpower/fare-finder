@@ -161,6 +161,8 @@ def handler(event, context):
             "event_type": "welcome",
             "email": email,
             "route": route,
+            # 訂閱時就把中文航線名寫進 plan_name, 寄信端不用再維護對照表
+            "route_label": row.get("plan_name"),
             "merchant_trade_no": trade_no,
             "current_period_end_date": period_end.strftime("%Y-%m-%d"),
             "amount": conf.get("amount", "300"),
