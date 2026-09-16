@@ -122,7 +122,7 @@ function cardState(sub: Subscription): CardState {
   if (status === "cancelled") {
     return {
       served: true,
-      badge: { label: "已取消續訂", icon: XCircle, tone: "muted" },
+      badge: { label: "已取消訂閱", icon: XCircle, tone: "muted" },
       // 綠界的定期定額約取消後無法復原，現在重訂等於同一個月付兩次錢，
       // 所以寬限期內不給重訂，到期變成 expired 時才出現「重新訂閱」
       cta: null,
