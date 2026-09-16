@@ -33,6 +33,29 @@ const API_URL = import.meta.env["VITE_FLIGHT_API_URL"] as string | undefined;
 
 const MONTHLY_PRICE = "NT$300";
 
+type PriceMap = Record<string, { price: number; currency: string } | null>;
+
+/** 查這幾條航線下個月的最低票價，純參考，讓使用者知道目標價要設多少 */
+function usePrices(routes: string[]) {
+  const key = [...routes].sort().join(",");
+  return useQuery({
+    queryKey: ["prices", key],
+    enabled: Boolean(API_URL && key),
+    // 後端已經快取 30 分鐘，前端跟著放寬，不用每次切分頁都重查
+    staleTime: 10 * 60_000,
+    queryFn: async (): Promise<PriceMap> => {
+      const res = await fetch(`${API_URL}/price?routes=${encodeURIComponent(key)}`);
+      if (!res.ok) throw new Error("查價失敗");
+      const data = await res.json();
+      return data.prices ?? {};
+    },
+  });
+}
+
+function formatTWD(value: number) {
+  return `NT$${Math.round(value).toLocaleString("en-US")}`;
+}
+
 // M2 起每列都有 subscription_status；M1 時代建的舊資料沒有這個欄位，
 // 那種列在後端會被付費閘門擋掉，所以這裡也當成「未訂閱」處理。
 type SubscriptionStatus =
@@ -159,6 +182,8 @@ function DashboardPage() {
     [subscriptionsQuery.data],
   );
 
+  const pricesQuery = usePrices(subscriptions.map((item) => item.route));
+
   // 沒有 pending_payment 了就代表啟用完成，停止輪詢
   useEffect(() => {
     if (!waiting) return;
@@ -281,6 +306,9 @@ function DashboardPage() {
                     key={sub.route}
                     subscription={sub}
                     email={user.email!}
+                    {...(pricesQuery.data?.[sub.route]?.price !== undefined
+                      ? { currentPrice: pricesQuery.data[sub.route]!.price }
+                      : {})}
                   />
                 ))}
               </div>
@@ -374,6 +402,8 @@ function AddRouteSection({
 
   const route = origin && destination ? `${origin}-${destination}` : "";
   const alreadyWatching = Boolean(route) && existing.includes(route);
+  const pricesQuery = usePrices(route ? [route] : []);
+  const currentPrice = route ? pricesQuery.data?.[route]?.price : undefined;
 
   const save = useMutation({
     mutationFn: (targetPrice: number) =>
@@ -443,7 +473,30 @@ function AddRouteSection({
           />
         </div>
 
-        <label className="mt-5 block text-xs text-muted-foreground">
+        {route && (
+          <p className="mt-4 text-xs text-muted-foreground">
+            {pricesQuery.isLoading ? (
+              "查詢目前票價…"
+            ) : currentPrice ? (
+              <>
+                {routeLabel(route)} 下個月最低約{" "}
+                <span className="text-foreground">{formatTWD(currentPrice)}</span>
+                。目標價設高於這個數字，就會馬上收到通知。
+                <button
+                  type="button"
+                  onClick={() => setPrice(String(Math.round(currentPrice)))}
+                  className="ml-2 text-primary underline-offset-2 hover:underline"
+                >
+                  帶入這個價格
+                </button>
+              </>
+            ) : (
+              "查不到這條航線目前的票價，可能是冷門航線或暫時沒有報價。"
+            )}
+          </p>
+        )}
+
+        <label className="mt-4 block text-xs text-muted-foreground">
           目標價（TWD）—— 低於這個價格就通知你
           <div className="mt-2 flex items-center gap-2 rounded-lg border border-border bg-background/60 px-3 py-2.5 focus-within:border-primary/40">
             <span className="text-sm text-muted-foreground">NT$</span>
@@ -454,7 +507,7 @@ function AddRouteSection({
               required
               value={price}
               onChange={(event) => setPrice(event.target.value)}
-              placeholder="15000"
+              placeholder={currentPrice ? String(Math.round(currentPrice)) : "15000"}
               className="w-full bg-transparent text-base text-foreground outline-none"
             />
           </div>
@@ -495,9 +548,12 @@ function AddRouteSection({
 function RouteCard({
   subscription,
   email,
+  currentPrice,
 }: {
   subscription: Subscription;
   email: string;
+  /** 下個月的最低票價，查不到就不顯示 */
+  currentPrice?: number;
 }) {
   const queryClient = useQueryClient();
   const state = cardState(subscription);
@@ -601,8 +657,13 @@ function RouteCard({
         </div>
       </label>
 
+      <p className="mt-2 text-xs text-muted-foreground">
+        {currentPrice
+          ? `目前最低約 ${formatTWD(currentPrice)}（下個月，參考值）`
+          : "目前票價查詢中…"}
+      </p>
       {state.note && (
-        <p className="mt-2 text-xs text-muted-foreground">{state.note}</p>
+        <p className="mt-1.5 text-xs text-muted-foreground">{state.note}</p>
       )}
       {state.warning && (
         <p className="mt-1.5 text-xs text-horizon">{state.warning}</p>

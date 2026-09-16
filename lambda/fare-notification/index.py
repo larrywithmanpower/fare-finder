@@ -45,6 +45,42 @@ def _env_num(name, default):
         return Decimal(str(default))
 
 
+# 信件配色：綠色＝對使用者有利（比目標價／上次通知便宜），紅色＝變貴。
+# 用純十六進位色碼, email client 對 CSS 變數與 oklch 都不支援。
+GOOD = "#0f7b3f"
+BAD = "#b42318"
+
+
+def _delta_lines(price, target_price, last_price):
+    """回 (html, text) —— 省多少、跟上次通知比是漲是跌"""
+    saved = int(target_price) - int(price)
+    html = [
+        '<p style="margin:16px 0 0;font-size:15px;color:#4a4a4a;">'
+        '你的目標價是 NT$%s，現在的最低價<strong style="color:%s;">便宜了 NT$%s</strong>。</p>'
+        % (format(int(target_price), ","), GOOD, format(saved, ","))
+    ]
+    text = ["你的目標價是 NT$%s，現在的最低價便宜了 NT$%s。"
+            % (format(int(target_price), ","), format(saved, ","))]
+
+    if last_price:
+        diff = int(price) - int(last_price)
+        if diff < 0:
+            html.append(
+                '<p style="margin:8px 0 0;font-size:14px;color:#4a4a4a;">'
+                '比上次通知的 NT$%s <strong style="color:%s;">再降 NT$%s</strong>。</p>'
+                % (format(int(last_price), ","), GOOD, format(-diff, ",")))
+            text.append("比上次通知的 NT$%s 再降 NT$%s。"
+                        % (format(int(last_price), ","), format(-diff, ",")))
+        elif diff > 0:
+            html.append(
+                '<p style="margin:8px 0 0;font-size:14px;color:#4a4a4a;">'
+                '比上次通知的 NT$%s <strong style="color:%s;">貴了 NT$%s</strong>。</p>'
+                % (format(int(last_price), ","), BAD, format(diff, ",")))
+            text.append("比上次通知的 NT$%s 貴了 NT$%s。"
+                        % (format(int(last_price), ","), format(diff, ",")))
+    return "".join(html), "\n".join(text)
+
+
 def route_label(msg):
     """中文城市名的三層來源: 訊息 -> 舊對照表 -> 直接顯示代碼"""
     route = msg["route"]
@@ -81,7 +117,7 @@ def subject(fare, names):
     return f"✈️ {origin} → {dest} 降價通知！NT${int(fare['price']):,} 已達標"
 
 
-def render_html(fare, names, target_price, url, usd=None):
+def render_html(fare, names, target_price, url, usd=None, last_price=None):
     origin, dest = names
     usd_line = ""
     if usd:
@@ -94,19 +130,20 @@ def render_html(fare, names, target_price, url, usd=None):
     flight = fare.get("airline") or ""
     if fare.get("flight_number"):
         flight = f"{flight}{fare['flight_number']}"
+    delta_html, _ = _delta_lines(fare["price"], target_price, last_price)
     return f"""<div style="font-family:-apple-system,'Helvetica Neue',sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;color:#1a1a1a;">
 <p style="margin:0 0 8px;color:#8b8b8b;font-size:13px;letter-spacing:1px;">FLIGHT PRICE NOTIFIER</p>
-<h1 style="margin:0 0 24px;font-size:22px;font-weight:700;">{origin} → {dest} 降價了</h1>
-<p style="margin:0;font-size:40px;font-weight:800;letter-spacing:-1px;">NT${int(fare['price']):,}</p>
+<h1 style="margin:0 0 24px;font-size:22px;font-weight:700;">{origin} → <span style="color:{GOOD};">{dest} 降價了</span></h1>
+<p style="margin:0;font-size:40px;font-weight:800;letter-spacing:-1px;color:{GOOD};">NT${int(fare['price']):,}</p>
 {usd_line}
-<p style="margin:16px 0 0;font-size:15px;color:#4a4a4a;">你的目標價是 NT${int(target_price):,}，現在的最低價已經低於這個數字。</p>
+{delta_html}
 <p style="margin:16px 0 0;font-size:15px;color:#4a4a4a;">{dates}<br>航班 {flight}</p>
 <p style="margin:28px 0 0;"><a href="{url}" style="display:inline-block;background:#1a1a1a;color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:6px;font-size:15px;font-weight:600;">立即訂購</a></p>
 <p style="margin:28px 0 0;font-size:12px;color:#a0a0a0;">票價隨時變動，實際金額以訂購頁面為準。</p>
 </div>"""
 
 
-def render_text(fare, names, target_price, url, usd=None):
+def render_text(fare, names, target_price, url, usd=None, last_price=None):
     origin, dest = names
     lines = [
         f"{origin} → {dest} 降價了",
@@ -115,9 +152,10 @@ def render_text(fare, names, target_price, url, usd=None):
     ]
     if usd:
         lines.append(f"約 US${int(usd['price']):,}")
+    _, delta_text = _delta_lines(fare["price"], target_price, last_price)
     lines += [
         "",
-        f"你的目標價是 NT${int(target_price):,}，現在的最低價已經低於這個數字。",
+        delta_text,
         f"去程 {(fare.get('depart_date') or '')[:10]}　回程 {(fare.get('return_date') or '')[:10]}",
         "",
         f"立即訂購：{url}",
@@ -202,7 +240,8 @@ def handle_record(record, cfg):
     price = Decimal(str(fare["price"]))
     pk = f"{email}#{route}"
 
-    send, reason = should_send(last_notification(pk), price)
+    last = last_notification(pk)
+    send, reason = should_send(last, price)
     if not send:
         print(f"skipped (deduped) {pk} price={price} reason={reason}")
         return
@@ -210,8 +249,9 @@ def handle_record(record, cfg):
     marker = cfg.get("marker")
     url = booking_url(fare, route, marker)
     names = route_label(message)
-    html = render_html(fare, names, target_price, url, usd)
-    text = render_text(fare, names, target_price, url, usd)
+    last_price = last.get("price") if last else None
+    html = render_html(fare, names, target_price, url, usd, last_price)
+    text = render_text(fare, names, target_price, url, usd, last_price)
 
     try:
         result = send_email(cfg, email, subject(fare, names), html, text)
