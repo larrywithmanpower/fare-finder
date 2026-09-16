@@ -7,7 +7,7 @@ import json
 import os
 import urllib.parse
 import urllib.request
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
 import boto3
@@ -72,6 +72,43 @@ def fetch_cheapest(origin, destination, month, token, currency):
     }
 
 
+def is_served(row):
+    """這列現在收得到通知嗎？回 (要不要寄, 是不是寬限期剛過完)
+
+    付費門檻就在這裡：
+      * active                              -> 收得到
+      * cancelled 且 current_period_end 未到 -> 收得到（已經付過這期的錢）
+      * cancelled 且已過期                   -> 收不到，而且要順手改成 expired
+      * pending_payment / expired / 沒有欄位  -> 收不到
+    """
+    status = row.get("subscription_status")
+    if status == "active":
+        return True, False
+    if status == "cancelled":
+        end = row.get("current_period_end")
+        if not end:
+            return False, True
+        try:
+            in_grace = datetime.fromisoformat(end) >= datetime.now(timezone.utc)
+        except ValueError:
+            return False, True
+        return in_grace, not in_grace
+    # M1 時代沒有 subscription_status 的舊資料也一併擋掉，重新訂閱付款才會變 active
+    return False, False
+
+
+def expire_row(row):
+    SUBSCRIPTIONS.update_item(
+        Key={"email": row["email"], "route": row["route"]},
+        UpdateExpression="SET subscription_status = :s, updated_at = :n",
+        ExpressionAttributeValues={
+            ":s": "expired",
+            ":n": datetime.now(timezone.utc).isoformat(),
+        },
+    )
+    print(f"grace lapsed -> expired {row['email']} {row['route']}")
+
+
 def handler(event, context):
     origin = event["origin"]
     destination = event["destination"]
@@ -96,15 +133,25 @@ def handler(event, context):
     price_twd = Decimal(str(cheapest["price"]))
     print(f"{route} {month} cheapest {price_twd} TWD ({cheapest.get('airline')})")
 
-    # M1 沒有付款門檻, 只用 route 過濾, 不看 subscription_status
-    subscribers = []
+    # M2 起有付款門檻。掃出這條航線的所有訂閱後, 由 is_served() 決定誰真的收得到通知
+    rows = []
     kwargs = {"FilterExpression": Attr("route").eq(route)}
     while True:
         page = SUBSCRIPTIONS.scan(**kwargs)
-        subscribers.extend(page.get("Items", []))
+        rows.extend(page.get("Items", []))
         if "LastEvaluatedKey" not in page:
             break
         kwargs["ExclusiveStartKey"] = page["LastEvaluatedKey"]
+
+    # 順便把寬限期已經過完的 cancelled 列懶惰改成 expired (parser 本來就會掃到每一列)
+    subscribers = []
+    for row in rows:
+        served, lapsed = is_served(row)
+        if lapsed:
+            expire_row(row)
+        if served:
+            subscribers.append(row)
+    print(f"{route}: {len(rows)} row(s), {len(subscribers)} paid/in-grace")
 
     queue_url = os.environ["FARE_QUEUE_URL"]
     enqueued = 0
@@ -125,5 +172,5 @@ def handler(event, context):
         enqueued += 1
         print(f"enqueued {sub['email']} {route} target={target} cheapest={price_twd}")
 
-    print(f"{route}: {len(subscribers)} subscriber(s), {enqueued} matched")
+    print(f"{route}: {len(subscribers)} served subscriber(s), {enqueued} matched")
     return {"route": route, "cheapest_twd": float(price_twd), "subscribers": len(subscribers), "enqueued": enqueued}
