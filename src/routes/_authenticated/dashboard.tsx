@@ -147,6 +147,7 @@ function DashboardPage() {
   // 所以只盯這一條有沒有啟用，不能看「清單裡還有沒有未付款的」
   const [paidRoute, setPaidRoute] = useState<string | null>(null);
   const [waiting, setWaiting] = useState(false);
+  const [adding, setAdding] = useState(false);
   useEffect(() => {
     const query = new URLSearchParams(window.location.search);
     const value = query.get("purchase");
@@ -324,18 +325,38 @@ function DashboardPage() {
               <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
                 My routes / 我的航線
               </p>
-              {subscriptionsQuery.isLoading && (
-                <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                  讀取中
-                </span>
-              )}
+              <span className="flex items-center gap-3">
+                {subscriptionsQuery.isLoading && (
+                  <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    讀取中
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setAdding(true)}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  新增航線
+                </button>
+              </span>
             </div>
 
             {!subscriptionsQuery.isLoading && subscriptions.length === 0 && (
-              <p className="mt-6 rounded-xl border border-dashed border-border px-5 py-8 text-center text-sm text-muted-foreground">
-                還沒有追蹤中的航線。在下面挑一組出發地與目的地就可以開始。
-              </p>
+              <div className="mt-6 rounded-xl border border-dashed border-border px-5 py-10 text-center">
+                <p className="text-sm text-muted-foreground">
+                  還沒有追蹤中的航線。
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setAdding(true)}
+                  className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  新增第一條航線
+                </button>
+              </div>
             )}
 
             {subscriptions.length > 0 && (
@@ -365,11 +386,6 @@ function DashboardPage() {
             )}
           </section>
 
-          <AddRouteSection
-            email={user.email!}
-            existing={subscriptions.map((item) => item.route)}
-          />
-
           <section
             className="fade-up mt-16 rounded-2xl border border-border bg-card/40 p-6"
             style={{ animationDelay: "0.3s" }}
@@ -394,6 +410,14 @@ function DashboardPage() {
           </section>
         </main>
       </div>
+
+      {adding && (
+        <AddRouteDialog
+          email={user.email!}
+          existing={subscriptions.map((item) => item.route)}
+          onClose={() => setAdding(false)}
+        />
+      )}
     </div>
   );
 }
@@ -458,12 +482,14 @@ async function submitSubscription(payload: {
   return res.json();
 }
 
-function AddRouteSection({
+function AddRouteDialog({
   email,
   existing,
+  onClose,
 }: {
   email: string;
   existing: string[];
+  onClose: () => void;
 }) {
   const queryClient = useQueryClient();
   const [origin, setOrigin] = useState("TPE");
@@ -485,12 +511,8 @@ function AddRouteSection({
         draft: true,
       }),
     onSuccess: async () => {
-      setDestination("");
-      setPrice("");
       await queryClient.invalidateQueries({ queryKey: ["subscriptions", email] });
-      document
-        .querySelector('[aria-label="我的航線"]')
-        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      onClose();
     },
   });
 
@@ -506,20 +528,52 @@ function AddRouteSection({
     setDestination(origin);
   }
 
+  // Esc 關閉；開著的時候鎖住背景捲動
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKeyDown);
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previous;
+    };
+  }, [onClose]);
+
   return (
-    <section
-      className="fade-up relative z-30 mt-16"
-      style={{ animationDelay: "0.22s" }}
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-background/70 p-4 backdrop-blur-sm sm:items-center sm:p-6"
+      onMouseDown={(event) => {
+        // 只有點在背景（不是彈窗裡面）才關
+        if (event.target === event.currentTarget) onClose();
+      }}
+      role="dialog"
+      aria-modal="true"
       aria-label="新增航線"
     >
-      <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-        Add a route / 新增航線
-      </p>
-
       <form
         onSubmit={handleSubmit}
-        className="surface-sheen mt-6 rounded-xl border border-border bg-card/40 p-5 sm:p-6"
+        className="surface-sheen my-auto w-full max-w-2xl rounded-2xl border border-border bg-card p-5 shadow-2xl sm:p-6"
       >
+        <div className="mb-5 flex items-start justify-between gap-3">
+          <div>
+            <p className="font-display text-xl">新增航線</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              先加進清單，要不要付費訂閱在卡片上決定
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="關閉"
+            className="shrink-0 rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
         <div className="grid gap-4 sm:grid-cols-[1fr_auto_1fr]">
           <CityPicker
             label="從哪裡出發"
@@ -589,7 +643,7 @@ function AddRouteSection({
           </p>
         )}
 
-        <div className="mt-5 flex flex-wrap items-center gap-3">
+        <div className="mt-6 flex flex-wrap items-center gap-3">
           <button
             type="submit"
             disabled={save.isPending || !destination || !API_URL}
@@ -602,16 +656,20 @@ function AddRouteSection({
             )}
             {destination ? `加入追蹤 ${routeLabel(route)}` : "選一個目的地"}
           </button>
-          <span className="text-xs text-muted-foreground">
-            先加進清單，要不要付費訂閱在上面的卡片決定
-          </span>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+          >
+            取消
+          </button>
         </div>
 
         {save.isError && (
           <p className="mt-3 text-xs text-destructive">儲存失敗，稍後再試。</p>
         )}
       </form>
-    </section>
+    </div>
   );
 }
 

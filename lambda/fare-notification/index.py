@@ -133,7 +133,7 @@ def render_html(fare, names, target_price, url, usd=None, last_price=None):
     delta_html, _ = _delta_lines(fare["price"], target_price, last_price)
     return f"""<div style="font-family:-apple-system,'Helvetica Neue',sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;color:#1a1a1a;">
 <p style="margin:0 0 8px;color:#8b8b8b;font-size:13px;letter-spacing:1px;">FLIGHT PRICE NOTIFIER</p>
-<h1 style="margin:0 0 24px;font-size:22px;font-weight:700;">{origin} → <span style="color:{GOOD};">{dest} 降價了</span></h1>
+<h1 style="margin:0 0 24px;font-size:22px;font-weight:700;">{origin} → {dest} <span style="color:{GOOD};">降價了</span></h1>
 <p style="margin:0;font-size:40px;font-weight:800;letter-spacing:-1px;color:{GOOD};">NT${int(fare['price']):,}</p>
 {usd_line}
 {delta_html}
