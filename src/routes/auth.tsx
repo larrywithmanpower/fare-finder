@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Plane } from "lucide-react";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/auth")({
@@ -63,13 +64,14 @@ function AuthPage() {
       {/* 裝飾層：夜空星點，不接受任何互動 */}
       <div className="starfield pointer-events-none absolute inset-0 opacity-60" aria-hidden />
 
-      <header className="relative mx-auto flex w-full max-w-6xl items-center px-6 py-6">
+      <header className="relative mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-6">
         <Link to="/" className="group inline-flex items-center gap-2.5">
           <Plane className="h-4 w-4 text-primary" aria-hidden />
           <span className="font-display text-lg tracking-tight transition-colors group-hover:text-primary">
             Flight Price Notifier
           </span>
         </Link>
+        <ThemeToggle />
       </header>
 
       <main className="relative flex flex-1 items-center justify-center px-6 pb-24 pt-4">

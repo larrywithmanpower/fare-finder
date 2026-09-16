@@ -66,6 +66,48 @@
   --horizon: oklch(0.74 0.1 205);
 }
 
+/* 淺色主題：同一套版面，只換色票。深色仍是預設，
+   使用者沒選過就跟著系統偏好走（切換的 script 在 index.html）。 */
+:root[data-theme="light"] {
+  --background: oklch(0.985 0.004 90);
+  --foreground: oklch(0.22 0.02 258);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.22 0.02 258);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.22 0.02 258);
+  --primary: oklch(0.62 0.13 72);
+  --primary-foreground: oklch(0.99 0.005 90);
+  --secondary: oklch(0.955 0.008 90);
+  --secondary-foreground: oklch(0.25 0.02 258);
+  --muted: oklch(0.955 0.008 90);
+  --muted-foreground: oklch(0.47 0.02 255);
+  --accent: oklch(0.955 0.035 85);
+  --accent-foreground: oklch(0.42 0.1 72);
+  --destructive: oklch(0.55 0.2 25);
+  --destructive-foreground: oklch(0.99 0.005 25);
+  --border: oklch(0.22 0.02 258 / 14%);
+  --input: oklch(0.22 0.02 258 / 20%);
+  --ring: oklch(0.62 0.13 72);
+  --horizon: oklch(0.55 0.1 215);
+}
+
+/* 夜空的裝飾在白底上只會變成髒點，關掉並把光暈調淡 */
+:root[data-theme="light"] .starfield {
+  background-image: none;
+}
+
+:root[data-theme="light"] .hero-glow {
+  background:
+    radial-gradient(70rem 34rem at 50% 118%, oklch(0.8 0.135 82 / 12%), transparent 62%),
+    radial-gradient(48rem 26rem at 12% -6%, oklch(0.74 0.1 205 / 8%), transparent 60%);
+}
+
+:root[data-theme="light"] .surface-sheen {
+  box-shadow:
+    inset 0 1px 0 0 oklch(1 0 0 / 80%),
+    0 1px 2px 0 oklch(0.22 0.02 258 / 8%);
+}
+
 @layer base {
   * {
     border-color: var(--color-border);

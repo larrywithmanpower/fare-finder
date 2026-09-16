@@ -14,6 +14,7 @@ import {
   ArrowLeftRight,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { CityPicker } from "@/components/CityPicker";
 import { routeLabel, routeLabelEn, splitRoute } from "@/lib/cities";
 
@@ -196,13 +197,16 @@ function DashboardPage() {
                 Flight Price Notifier
               </span>
             </span>
-            <button
-              onClick={handleSignOut}
+            <span className="flex items-center gap-2.5">
+              <ThemeToggle />
+              <button
+                onClick={handleSignOut}
               className="inline-flex items-center gap-2 rounded-lg border border-border bg-secondary/60 px-3.5 py-2 text-sm font-medium text-secondary-foreground transition-colors hover:border-primary/40 hover:bg-accent"
             >
-              <LogOut className="h-4 w-4" />
-              Sign out / 登出
-            </button>
+                <LogOut className="h-4 w-4" />
+                Sign out / 登出
+              </button>
+            </span>
           </div>
           <div
             className="horizon-line pointer-events-none absolute inset-x-0 bottom-0 h-px opacity-60"
@@ -502,6 +506,8 @@ function RouteCard({
   const state = cardState(subscription);
   const [price, setPrice] = useState(String(subscription.target_price));
   const [confirmingCancel, setConfirmingCancel] = useState(false);
+  // 任何會扣到錢的動作都先讓使用者確認一次，不直接把人丟去收銀台
+  const [confirmingPay, setConfirmingPay] = useState(false);
   const [origin, destination] = splitRoute(subscription.route);
   const isActive = subscription.subscription_status === "active";
 
@@ -550,7 +556,11 @@ function RouteCard({
     event.preventDefault();
     const value = Number(price);
     if (!Number.isFinite(value) || value <= 0) return;
-    save.mutate({ targetPrice: value });
+    if (state.served) {
+      save.mutate({ targetPrice: value }); // 只是改目標價，不扣錢
+      return;
+    }
+    setConfirmingPay(true);
   }
 
   const isCancelled = subscription.subscription_status === "cancelled";
@@ -610,20 +620,13 @@ function RouteCard({
 
       <div className="mt-5 flex flex-wrap items-center gap-3">
         {/* 已付費的人只有改了數字才需要按儲存；沒付費的人一律走付款流程 */}
-        {isCancelled && !dirty && (
+        {isCancelled && !dirty && !confirmingPay && (
           <button
             type="button"
-            disabled={save.isPending || !API_URL}
-            onClick={() =>
-              save.mutate({ targetPrice: Number(price), resume: true })
-            }
-            className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+            onClick={() => setConfirmingPay(true)}
+            className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
           >
-            {save.isPending ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <CreditCard className="h-3.5 w-3.5" />
-            )}
+            <CreditCard className="h-3.5 w-3.5" />
             {state.cta}
           </button>
         )}
@@ -649,23 +652,55 @@ function RouteCard({
             </>
           )
         ) : (
-          <button
-            type="submit"
-            disabled={save.isPending || !API_URL}
-            className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
-          >
-            {save.isPending ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
+          !confirmingPay && (
+            <button
+              type="submit"
+              disabled={!API_URL}
+              className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+            >
               <CreditCard className="h-3.5 w-3.5" />
-            )}
-            {state.cta}
-          </button>
+              {state.cta}
+            </button>
+          )
+        )}
+
+        {/* 扣款前的最後確認 —— 按下「前往付款」才會離開這個網站 */}
+        {confirmingPay && (
+          <span className="flex flex-wrap items-center gap-2 text-sm">
+            <span className="text-muted-foreground">
+              將前往綠界結帳，每月 {MONTHLY_PRICE}。
+            </span>
+            <button
+              type="button"
+              disabled={save.isPending || !API_URL}
+              onClick={() =>
+                save.mutate({
+                  targetPrice: Number(price),
+                  ...(isCancelled ? { resume: true } : {}),
+                })
+              }
+              className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+            >
+              {save.isPending ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <CreditCard className="h-3.5 w-3.5" />
+              )}
+              前往付款
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirmingPay(false)}
+              className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+            >
+              再想想
+            </button>
+          </span>
         )}
 
         {/* active 要退訂（跟綠界取消扣款）；沒付過款的列則是單純從清單移除 */}
-        {(subscription.subscription_status === "active" ||
-          !state.served) &&
+        {!confirmingPay &&
+          (subscription.subscription_status === "active" || !state.served) &&
           (confirmingCancel ? (
             <span className="flex items-center gap-2 text-sm">
               <span className="text-muted-foreground">

@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Plane, Bell, CircleSlash } from "lucide-react";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { useScrollReveal } from "@/hooks/use-scroll-reveal";
 
 export const Route = createFileRoute("/")({
@@ -75,12 +76,15 @@ function LandingPage() {
             Flight Price Notifier
           </span>
         </span>
-        <Link
-          to="/auth"
-          className="rounded-lg border border-border px-4 py-2 text-sm text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
-        >
-          Sign in / 登入
-        </Link>
+        <span className="flex items-center gap-2.5">
+          <ThemeToggle />
+          <Link
+            to="/auth"
+            className="rounded-lg border border-border px-4 py-2 text-sm text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
+          >
+            Sign in / 登入
+          </Link>
+        </span>
       </header>
 
       <main>
