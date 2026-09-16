@@ -263,9 +263,9 @@ def handler(event, context):
         })
 
     # 還在服務期內的人：只改目標價，不動狀態、不重新付款。
-    # 例外是 resume —— 已取消的人想恢復自動續訂, 綠界的定期定額約已經被解掉了,
-    # 只能重新簽一張, 所以還是要走一次收銀台。
-    if _still_served(existing) and not body.get("resume"):
+    # 已取消但還在寬限期的人也走這裡 —— 綠界的定期定額約解掉就救不回來,
+    # 現在重訂等於同一個月付兩次錢, 所以要等本期結束變成 expired 才重訂。
+    if _still_served(existing):
         TABLE.update_item(
             Key={"email": email, "route": route},
             UpdateExpression="SET " + common_set,

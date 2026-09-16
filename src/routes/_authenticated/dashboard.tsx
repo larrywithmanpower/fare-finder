@@ -95,13 +95,12 @@ function cardState(sub: Subscription): CardState {
     return {
       served: true,
       badge: { label: "已取消續訂", icon: XCircle, tone: "muted" },
-      cta: "恢復自動續訂",
+      // 綠界的定期定額約取消後無法復原，現在重訂等於同一個月付兩次錢，
+      // 所以寬限期內不給重訂，到期變成 expired 時才出現「重新訂閱」
+      cta: null,
       note: sub.current_period_end_date
-        ? `不會再扣款，${sub.current_period_end_date} 前仍然會通知你`
-        : "不會再扣款，本期結束前仍然會通知你",
-      // 綠界的定期定額約取消後無法復原，「恢復」其實是重新簽一張新的約
-      warning:
-        "恢復會重新扣一次 NT$300 並開始新的一期，本期剩下的天數不折抵。",
+        ? `不會再扣款，${sub.current_period_end_date} 前仍然會通知你，之後可以重新訂閱`
+        : "不會再扣款，本期結束前仍然會通知你，之後可以重新訂閱",
     };
   }
   return {
@@ -340,8 +339,6 @@ async function submitSubscription(payload: {
   target_price: number;
   /** true = 只加進追蹤清單，不進付款流程 */
   draft?: boolean;
-  /** true = 已取消的人要恢復自動續訂，得重新簽一次綠界的定期定額約 */
-  resume?: boolean;
 }) {
   const res = await fetch(`${API_URL}/subscribe`, {
     method: "POST",
@@ -521,14 +518,8 @@ function RouteCard({
   const dirty = price !== String(subscription.target_price);
 
   const save = useMutation({
-    mutationFn: ({ targetPrice, resume }: { targetPrice: number; resume?: boolean }) =>
-      submitSubscription({
-        email,
-        origin,
-        destination,
-        target_price: targetPrice,
-        ...(resume ? { resume: true as const } : {}),
-      }),
+    mutationFn: ({ targetPrice }: { targetPrice: number }) =>
+      submitSubscription({ email, origin, destination, target_price: targetPrice }),
     onSuccess: async (result) => {
       if (result?.redirected) return;
       await queryClient.invalidateQueries({ queryKey: ["subscriptions", email] });
@@ -563,7 +554,6 @@ function RouteCard({
     setConfirmingPay(true);
   }
 
-  const isCancelled = subscription.subscription_status === "cancelled";
 
   return (
     <form
@@ -620,17 +610,6 @@ function RouteCard({
 
       <div className="mt-5 flex flex-wrap items-center gap-3">
         {/* 已付費的人只有改了數字才需要按儲存；沒付費的人一律走付款流程 */}
-        {isCancelled && !dirty && !confirmingPay && (
-          <button
-            type="button"
-            onClick={() => setConfirmingPay(true)}
-            className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
-          >
-            <CreditCard className="h-3.5 w-3.5" />
-            {state.cta}
-          </button>
-        )}
-
         {state.served ? (
           dirty && (
             <>
@@ -676,7 +655,6 @@ function RouteCard({
               onClick={() =>
                 save.mutate({
                   targetPrice: Number(price),
-                  ...(isCancelled ? { resume: true } : {}),
                 })
               }
               className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
@@ -700,11 +678,14 @@ function RouteCard({
 
         {/* active 要退訂（跟綠界取消扣款）；沒付過款的列則是單純從清單移除 */}
         {!confirmingPay &&
-          (subscription.subscription_status === "active" || !state.served) &&
           (confirmingCancel ? (
             <span className="flex items-center gap-2 text-sm">
               <span className="text-muted-foreground">
-                {isActive ? "確定取消訂閱？" : "從清單移除這條航線？"}
+                {isActive
+                  ? "確定取消訂閱？"
+                  : state.served
+                    ? "移除後會立刻停止通知，本期剩下的天數不保留。確定？"
+                    : "從清單移除這條航線？"}
               </span>
               <button
                 type="button"
