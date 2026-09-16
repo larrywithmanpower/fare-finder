@@ -897,8 +897,9 @@ function RouteCard({
             <button
               type="button"
               onClick={() => setConfirmingCancel(true)}
-              className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-destructive/40 px-4 py-2.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10"
             >
+              <XCircle className="h-3.5 w-3.5" />
               {isActive ? "取消訂閱" : "移除"}
             </button>
           ))}
