@@ -262,8 +262,10 @@ def handler(event, context):
             "currency": "TWD", "subscription_status": "draft",
         })
 
-    # 還在服務期內的人：只改目標價，不動狀態、不重新付款
-    if _still_served(existing):
+    # 還在服務期內的人：只改目標價，不動狀態、不重新付款。
+    # 例外是 resume —— 已取消的人想恢復自動續訂, 綠界的定期定額約已經被解掉了,
+    # 只能重新簽一張, 所以還是要走一次收銀台。
+    if _still_served(existing) and not body.get("resume"):
         TABLE.update_item(
             Key={"email": email, "route": route},
             UpdateExpression="SET " + common_set,

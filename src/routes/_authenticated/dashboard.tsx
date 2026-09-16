@@ -92,7 +92,7 @@ function cardState(sub: Subscription): CardState {
     return {
       served: true,
       badge: { label: "已取消續訂", icon: XCircle, tone: "muted" },
-      cta: null,
+      cta: "恢復自動續訂",
       note: sub.current_period_end_date
         ? `不會再扣款，${sub.current_period_end_date} 前仍然會通知你`
         : "不會再扣款，本期結束前仍然會通知你",
@@ -331,6 +331,8 @@ async function submitSubscription(payload: {
   target_price: number;
   /** true = 只加進追蹤清單，不進付款流程 */
   draft?: boolean;
+  /** true = 已取消的人要恢復自動續訂，得重新簽一次綠界的定期定額約 */
+  resume?: boolean;
 }) {
   const res = await fetch(`${API_URL}/subscribe`, {
     method: "POST",
@@ -508,8 +510,14 @@ function RouteCard({
   const dirty = price !== String(subscription.target_price);
 
   const save = useMutation({
-    mutationFn: (targetPrice: number) =>
-      submitSubscription({ email, origin, destination, target_price: targetPrice }),
+    mutationFn: ({ targetPrice, resume }: { targetPrice: number; resume?: boolean }) =>
+      submitSubscription({
+        email,
+        origin,
+        destination,
+        target_price: targetPrice,
+        ...(resume ? { resume: true as const } : {}),
+      }),
     onSuccess: async (result) => {
       if (result?.redirected) return;
       await queryClient.invalidateQueries({ queryKey: ["subscriptions", email] });
@@ -537,8 +545,10 @@ function RouteCard({
     event.preventDefault();
     const value = Number(price);
     if (!Number.isFinite(value) || value <= 0) return;
-    save.mutate(value);
+    save.mutate({ targetPrice: value });
   }
+
+  const isCancelled = subscription.subscription_status === "cancelled";
 
   return (
     <form
@@ -592,6 +602,24 @@ function RouteCard({
 
       <div className="mt-5 flex flex-wrap items-center gap-3">
         {/* 已付費的人只有改了數字才需要按儲存；沒付費的人一律走付款流程 */}
+        {isCancelled && !dirty && (
+          <button
+            type="button"
+            disabled={save.isPending || !API_URL}
+            onClick={() =>
+              save.mutate({ targetPrice: Number(price), resume: true })
+            }
+            className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+          >
+            {save.isPending ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <CreditCard className="h-3.5 w-3.5" />
+            )}
+            {state.cta}
+          </button>
+        )}
+
         {state.served ? (
           dirty && (
             <>
