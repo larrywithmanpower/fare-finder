@@ -29,15 +29,28 @@ BILLABLE = {"active", "cancelled"}
 # 提早標記是安全的: 綠界的付款通知晚到, callback 照樣會把它翻成 active。
 PENDING_TTL_MINUTES = int(os.environ.get("PENDING_TTL_MINUTES", "30"))
 
+# 「最近移除」保留多久才真的刪掉
+REMOVED_TTL_DAYS = int(os.environ.get("REMOVED_TTL_DAYS", "30"))
 
-def _stale(row, deadline):
-    stamp = row.get("updated_at")
+
+def _stale(row, deadline, field="updated_at"):
+    stamp = row.get(field)
     if not stamp:
         return False
     try:
         return datetime.fromisoformat(stamp) < deadline
     except ValueError:
         return False
+
+
+def _purge(row):
+    """最近移除放超過保留期 -> 真的刪掉"""
+    TABLE.delete_item(
+        Key={"email": row["email"], "route": row["route"]},
+        ConditionExpression="subscription_status = :removed",
+        ExpressionAttributeValues={":removed": "removed"},
+    )
+    print("removed over %dd -> purged %s %s" % (REMOVED_TTL_DAYS, row["email"], row["route"]))
 
 
 def _expire(row):
@@ -60,14 +73,22 @@ def routes_from_subscriptions():
     """掃訂閱表, 回 {route: (origin, destination)}"""
     found = {}
     kwargs = {
-        "ProjectionExpression": "email, #r, origin, destination, subscription_status, updated_at",
+        "ProjectionExpression": (
+            "email, #r, origin, destination, subscription_status, updated_at, removed_at"
+        ),
         "ExpressionAttributeNames": {"#r": "route"},
     }
-    deadline = datetime.now(timezone.utc) - timedelta(minutes=PENDING_TTL_MINUTES)
+    now = datetime.now(timezone.utc)
+    deadline = now - timedelta(minutes=PENDING_TTL_MINUTES)
+    purge_deadline = now - timedelta(days=REMOVED_TTL_DAYS)
     while True:
         page = TABLE.scan(**kwargs)
         for row in page.get("Items", []):
             status = row.get("subscription_status")
+            if status == "removed":
+                if _stale(row, purge_deadline, "removed_at"):
+                    _purge(row)
+                continue
             if status == "pending_payment" and _stale(row, deadline):
                 _expire(row)
                 continue

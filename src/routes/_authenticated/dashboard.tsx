@@ -13,6 +13,8 @@ import {
   Plus,
   ArrowLeftRight,
   X,
+  ChevronDown,
+  RotateCcw,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -64,7 +66,8 @@ type SubscriptionStatus =
   | "pending_payment"
   | "active"
   | "cancelled"
-  | "expired";
+  | "expired"
+  | "removed";
 
 type Subscription = {
   route: string;
@@ -73,6 +76,7 @@ type Subscription = {
   currency: string;
   subscription_status?: SubscriptionStatus;
   current_period_end_date?: string;
+  removed_at?: string;
 };
 
 type CardState = {
@@ -181,12 +185,20 @@ function DashboardPage() {
     },
   });
 
-  const subscriptions = useMemo(
+  const allRows = useMemo(
     () =>
       [...(subscriptionsQuery.data ?? [])].sort((a, b) =>
         a.route.localeCompare(b.route),
       ),
     [subscriptionsQuery.data],
+  );
+  const subscriptions = useMemo(
+    () => allRows.filter((item) => item.subscription_status !== "removed"),
+    [allRows],
+  );
+  const removed = useMemo(
+    () => allRows.filter((item) => item.subscription_status === "removed"),
+    [allRows],
   );
 
   const pricesQuery = usePrices(subscriptions.map((item) => item.route));
@@ -386,6 +398,10 @@ function DashboardPage() {
             )}
           </section>
 
+          {removed.length > 0 && (
+            <RemovedSection rows={removed} email={user.email!} />
+          )}
+
           <section
             className="fade-up mt-16 rounded-2xl border border-border bg-card/40 p-6"
             style={{ animationDelay: "0.3s" }}
@@ -419,6 +435,106 @@ function DashboardPage() {
         />
       )}
     </div>
+  );
+}
+
+/** 最近移除 —— 軟刪除的航線放這裡，30 天後才真的清掉，這期間可以救回來 */
+function RemovedSection({ rows, email }: { rows: Subscription[]; email: string }) {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+
+  const act = useMutation({
+    mutationFn: async ({
+      row,
+      purge,
+    }: {
+      row: Subscription;
+      purge: boolean;
+    }) => {
+      const [origin, destination] = splitRoute(row.route);
+      const res = purge
+        ? await fetch(`${API_URL}/cancel`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ email, route: row.route, purge: true }),
+          })
+        : await fetch(`${API_URL}/subscribe`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              email,
+              origin,
+              destination,
+              target_price: row.target_price,
+              draft: true,
+            }),
+          });
+      if (!res.ok) throw new Error("操作失敗");
+      return res.json();
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["subscriptions", email] });
+    },
+  });
+
+  return (
+    <section className="fade-up mt-16" style={{ animationDelay: "0.26s" }}>
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        className="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-muted-foreground transition-colors hover:text-foreground"
+      >
+        Recently removed / 最近移除（{rows.length}）
+        <ChevronDown
+          className={`h-3.5 w-3.5 transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      {open && (
+        <>
+          <p className="mt-3 text-xs text-muted-foreground">
+            移除的航線會保留 30 天，這段期間可以連同目標價一起復原。
+          </p>
+          <ul className="mt-4 divide-y divide-border rounded-xl border border-border bg-card/40">
+            {rows.map((row) => (
+              <li
+                key={row.route}
+                className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
+              >
+                <span className="min-w-0">
+                  <span className="text-sm">{routeLabel(row.route)}</span>
+                  <span className="ml-2 text-xs text-muted-foreground">
+                    目標 {formatTWD(row.target_price)}
+                  </span>
+                </span>
+                <span className="flex shrink-0 items-center gap-3">
+                  <button
+                    type="button"
+                    disabled={act.isPending}
+                    onClick={() => act.mutate({ row, purge: false })}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium transition-colors hover:border-primary/40 hover:bg-accent disabled:opacity-50"
+                  >
+                    <RotateCcw className="h-3 w-3" />
+                    復原
+                  </button>
+                  <button
+                    type="button"
+                    disabled={act.isPending}
+                    onClick={() => act.mutate({ row, purge: true })}
+                    className="text-xs text-muted-foreground transition-colors hover:text-destructive disabled:opacity-50"
+                  >
+                    永久刪除
+                  </button>
+                </span>
+              </li>
+            ))}
+          </ul>
+          {act.isError && (
+            <p className="mt-3 text-xs text-destructive">操作失敗，稍後再試。</p>
+          )}
+        </>
+      )}
+    </section>
   );
 }
 

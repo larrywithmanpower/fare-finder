@@ -102,9 +102,26 @@ def handler(event, context):
     row = TABLE.get_item(Key={"email": email, "route": route}).get("Item") or {}
 
     # 從來沒扣過款的列（draft / pending_payment / expired）沒有什麼好「取消」的,
-    # 直接從追蹤清單移除, 不必去打綠界的取消 API
+    # 不必去打綠界的取消 API。這裡是軟刪除 —— 標記成 removed 收進「最近移除」,
+    # 使用者後悔還能把目標價一起救回來, 30 天後由 parser-wrapper 真的刪掉。
     if row and row.get("subscription_status") != "active":
-        TABLE.delete_item(Key={"email": email, "route": route})
+        if body.get("purge") or row.get("subscription_status") == "removed":
+            TABLE.delete_item(Key={"email": email, "route": route})
+            print("purged %s %s" % (email, route))
+            return _resp(200, {"ok": True, "purged": True, "route": route})
+
+        TABLE.update_item(
+            Key={"email": email, "route": route},
+            UpdateExpression=(
+                "SET subscription_status = :s, removed_at = :n, "
+                "status_before_remove = :b, updated_at = :n"
+            ),
+            ExpressionAttributeValues={
+                ":s": "removed",
+                ":n": datetime.now(timezone.utc).isoformat(),
+                ":b": row.get("subscription_status") or "draft",
+            },
+        )
         print("removed %s %s status=%s" % (email, route, row.get("subscription_status")))
         return _resp(200, {"ok": True, "removed": True, "route": route})
     if not row:
