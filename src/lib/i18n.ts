@@ -585,12 +585,11 @@ const LocaleContext = createContext<{ locale: Locale; setLocale: (next: Locale) 
 });
 
 export function LocaleProvider({ children }: { children: ReactNode }) {
-  // SSR 與第一次繪製都先用繁中，掛載後才換成使用者的語系，避免兩邊對不起來
-  const [locale, setLocaleState] = useState<Locale>("zh-Hant");
-
-  useEffect(() => {
-    setLocaleState(storedLocale() ?? detectLocale());
-  }, []);
+  // 第一次繪製就用對的語系，否則日文使用者會先閃一下中文。
+  // 這是純前端渲染的站，沒有伺服器端輸出要對齊，所以可以同步判斷。
+  const [locale, setLocaleState] = useState<Locale>(
+    () => storedLocale() ?? detectLocale(),
+  );
 
   useEffect(() => {
     document.documentElement.lang = locale;
