@@ -175,6 +175,7 @@ def handler(event, context):
             "email": email,
             "route": route,
             "route_label": row.get("plan_name"),
+            "locale": row.get("locale"),
             "current_period_end_date": end_date,
         }, ensure_ascii=False),
     )

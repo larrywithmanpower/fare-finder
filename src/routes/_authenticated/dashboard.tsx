@@ -19,7 +19,9 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { CityPicker } from "@/components/CityPicker";
-import { routeLabel, routeLabelEn, splitRoute } from "@/lib/cities";
+import { routeLabel, splitRoute } from "@/lib/cities";
+import { useT, type Locale, type Translate } from "@/lib/i18n";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({
@@ -48,7 +50,7 @@ function usePrices(routes: string[]) {
     staleTime: 10 * 60_000,
     queryFn: async (): Promise<PriceMap> => {
       const res = await fetch(`${API_URL}/price?routes=${encodeURIComponent(key)}`);
-      if (!res.ok) throw new Error("查價失敗");
+      if (!res.ok) throw new Error("price lookup failed");
       const data = await res.json();
       return data.prices ?? {};
     },
@@ -91,57 +93,58 @@ type CardState = {
   warning?: string;
 };
 
-function cardState(sub: Subscription): CardState {
+function cardState(sub: Subscription, t: Translate): CardState {
   const status = sub.subscription_status;
 
   if (status === "active") {
     return {
       served: true,
-      badge: { label: "通知中", icon: Check, tone: "ok" },
+      badge: { label: t("badge.active"), icon: Check, tone: "ok" },
       cta: null,
       note: sub.current_period_end_date
-        ? `本期至 ${sub.current_period_end_date}，到期自動續訂`
+        ? t("note.active", { date: sub.current_period_end_date })
         : null,
     };
   }
   if (status === "draft") {
     return {
       served: false,
-      badge: { label: "未訂閱", icon: Clock, tone: "muted" },
-      cta: "訂閱並付款",
-      note: `每月 ${MONTHLY_PRICE}，訂閱後才會開始為你盯這條航線`,
+      badge: { label: t("badge.draft"), icon: Clock, tone: "muted" },
+      cta: t("cta.subscribe"),
+      note: t("note.draft", { price: MONTHLY_PRICE }),
     };
   }
   if (status === "pending_payment") {
     return {
       served: false,
-      badge: { label: "未完成付款", icon: Clock, tone: "warn" },
-      cta: "完成付款",
-      note: "付款完成後才會開始為你盯票價",
+      badge: { label: t("badge.pending"), icon: Clock, tone: "warn" },
+      cta: t("cta.completePayment"),
+      note: t("note.pending"),
     };
   }
   if (status === "cancelled") {
     return {
       served: true,
-      badge: { label: "已取消訂閱", icon: XCircle, tone: "muted" },
+      badge: { label: t("badge.cancelled"), icon: XCircle, tone: "muted" },
       // 綠界的定期定額約取消後無法復原，現在重訂等於同一個月付兩次錢，
       // 所以寬限期內不給重訂，到期變成 expired 時才出現「重新訂閱」
       cta: null,
       note: sub.current_period_end_date
-        ? `不會再扣款，${sub.current_period_end_date} 前仍然會通知你，之後可以重新訂閱`
-        : "不會再扣款，本期結束前仍然會通知你，之後可以重新訂閱",
+        ? t("note.cancelled", { date: sub.current_period_end_date })
+        : t("note.cancelledNoDate"),
     };
   }
   return {
     served: false,
-    badge: { label: "已停止", icon: XCircle, tone: "muted" },
-    cta: "重新訂閱",
-    note: `月費 ${MONTHLY_PRICE}，隨時可取消`,
+    badge: { label: t("badge.expired"), icon: XCircle, tone: "muted" },
+    cta: t("cta.resubscribe"),
+    note: t("note.expired", { price: MONTHLY_PRICE }),
   };
 }
 
 function DashboardPage() {
   const { user } = Route.useRouteContext();
+  const { t, locale } = useT();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
@@ -180,7 +183,7 @@ function DashboardPage() {
       const res = await fetch(
         `${API_URL}/subscriptions?email=${encodeURIComponent(user.email!)}`,
       );
-      if (!res.ok) throw new Error("讀取訂閱失敗");
+      if (!res.ok) throw new Error("load subscriptions failed");
       const data = await res.json();
       return data.subscriptions ?? [];
     },
@@ -211,6 +214,7 @@ function DashboardPage() {
 
   const pricesQuery = usePrices(subscriptions.map((item) => item.route));
 
+  const bannerRoute = paidRoute ? routeLabel(paidRoute, locale) : "";
   const activated = paidRoute
     ? subscriptions.find((item) => item.route === paidRoute)
         ?.subscription_status === "active"
@@ -265,13 +269,14 @@ function DashboardPage() {
               </span>
             </span>
             <span className="flex items-center gap-2.5">
+              <LanguageSwitcher />
               <ThemeToggle />
               <button
                 onClick={handleSignOut}
               className="inline-flex items-center gap-2 rounded-lg border border-border bg-secondary/60 px-3.5 py-2 text-sm font-medium text-secondary-foreground transition-colors hover:border-primary/40 hover:bg-accent"
             >
                 <LogOut className="h-4 w-4" />
-                Sign out / 登出
+                {t("nav.signOut")}
               </button>
             </span>
           </div>
@@ -288,68 +293,56 @@ function DashboardPage() {
               Your fare watch
             </p>
             <h1 className="mt-4 font-display text-5xl sm:text-6xl">
-              你的降價通知
+              {t("dash.title")}
             </h1>
             <div className="mt-6 inline-flex items-center gap-2 rounded-full border border-border px-3.5 py-1.5 text-xs text-muted-foreground">
               <span className="inline-block h-1.5 w-1.5 rounded-full bg-primary/70" />
-              Signed in as
+              {t("dash.signedInAs")}
               <span className="text-foreground">{user.email}</span>
             </div>
           </div>
 
           {purchase === "success" && (
-            <Banner tone="ok" onClose={() => setPurchase(null)}>
+            <Banner tone="ok" onClose={() => setPurchase(null)} closeLabel={t("banner.close")}>
               {waiting ? (
                 <>
                   <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin" />
-                  <span>
-                    {paidRoute ? `${routeLabel(paidRoute)} ` : ""}
-                    付款完成，正在啟用…
-                  </span>
+                  <span>{t("banner.activating", { route: bannerRoute })}</span>
                 </>
               ) : activated ? (
                 <>
                   <Check className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span>
-                    {paidRoute ? `${routeLabel(paidRoute)} ` : ""}
-                    訂閱已啟用，我們開始為你盯票價了。
-                  </span>
+                  <span>{t("banner.activated", { route: bannerRoute })}</span>
                 </>
               ) : (
                 <>
                   <Clock className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span>
-                    {paidRoute ? `${routeLabel(paidRoute)} ` : ""}
-                    付款完成，但還沒收到綠界的確認。稍後重新整理看看。
-                  </span>
+                  <span>{t("banner.unconfirmed", { route: bannerRoute })}</span>
                 </>
               )}
             </Banner>
           )}
           {purchase === "failed" && (
-            <Banner tone="bad" onClose={() => setPurchase(null)}>
+            <Banner tone="bad" onClose={() => setPurchase(null)} closeLabel={t("banner.close")}>
               <XCircle className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>
-                {paidRoute ? `${routeLabel(paidRoute)} ` : ""}
-                付款沒有完成，還沒開始通知你。可以再按一次「完成付款」。
-              </span>
+              <span>{t("banner.failed", { route: bannerRoute })}</span>
             </Banner>
           )}
 
           <section
             className="fade-up mt-14"
             style={{ animationDelay: "0.15s" }}
-            aria-label="我的航線"
+            aria-label={t("dash.myRoutes")}
           >
             <div className="flex items-baseline justify-between">
               <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                My routes / 我的航線
+                {t("dash.myRoutes")}
               </p>
               <span className="flex items-center gap-3">
                 {subscriptionsQuery.isLoading && (
                   <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
                     <Loader2 className="h-3 w-3 animate-spin" />
-                    讀取中
+                    {t("dash.loading")}
                   </span>
                 )}
                 <button
@@ -358,7 +351,7 @@ function DashboardPage() {
                   className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
                 >
                   <Plus className="h-3.5 w-3.5" />
-                  新增航線
+                  {t("dash.addRoute")}
                 </button>
               </span>
             </div>
@@ -366,7 +359,7 @@ function DashboardPage() {
             {!subscriptionsQuery.isLoading && subscriptions.length === 0 && (
               <div className="mt-6 rounded-xl border border-dashed border-border px-5 py-10 text-center">
                 <p className="text-sm text-muted-foreground">
-                  還沒有追蹤中的航線。
+                  {t("dash.empty")}
                 </p>
                 <button
                   type="button"
@@ -374,7 +367,7 @@ function DashboardPage() {
                   className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
                 >
                   <Plus className="h-3.5 w-3.5" />
-                  新增第一條航線
+                  {t("dash.addFirst")}
                 </button>
               </div>
             )}
@@ -396,12 +389,12 @@ function DashboardPage() {
 
             {!API_URL && (
               <p className="mt-6 text-sm text-muted-foreground">
-                尚未設定 <code>VITE_FLIGHT_API_URL</code>，訂閱功能停用。
+                {t("dash.noApi")}
               </p>
             )}
             {subscriptionsQuery.isError && (
               <p className="mt-6 text-sm text-destructive">
-                讀不到現有訂閱，稍後再試。
+                {t("dash.loadError")}
               </p>
             )}
           </section>
@@ -419,15 +412,12 @@ function DashboardPage() {
                 <BellRing className="h-4 w-4" />
               </div>
               <div>
-                <p className="font-display text-lg">通知怎麼送到你手上</p>
+                <p className="font-display text-lg">{t("info.title")}</p>
                 <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-                  我們每 30 分鐘查一次下個月的最低票價。低於你的目標價就寄 email
-                  給你，附上立即訂購連結。同一條航線 24
-                  小時內只寄一次，除非價格又跌超過 20%（或 NT$2,000）。
+                  {t("info.body1")}
                 </p>
                 <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-                  每條航線月費 {MONTHLY_PRICE}，由綠界信用卡定期定額扣款。
-                  隨時可以取消，取消後不再扣款，但本期結束前仍然會通知你。
+                  {t("info.body2", { price: MONTHLY_PRICE })}
                 </p>
               </div>
             </div>
@@ -448,6 +438,7 @@ function DashboardPage() {
 
 /** 最近移除 —— 軟刪除的航線放這裡，30 天後才真的清掉，這期間可以救回來 */
 function RemovedSection({ rows, email }: { rows: Subscription[]; email: string }) {
+  const { t, locale } = useT();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
 
@@ -475,9 +466,10 @@ function RemovedSection({ rows, email }: { rows: Subscription[]; email: string }
               destination,
               target_price: row.target_price,
               draft: true,
+              locale,
             }),
           });
-      if (!res.ok) throw new Error("操作失敗");
+      if (!res.ok) throw new Error("removed action failed");
       return res.json();
     },
     onSuccess: async () => {
@@ -492,7 +484,7 @@ function RemovedSection({ rows, email }: { rows: Subscription[]; email: string }
         onClick={() => setOpen((prev) => !prev)}
         className="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-muted-foreground transition-colors hover:text-foreground"
       >
-        Recently removed / 最近移除（{rows.length}）
+        {t("removed.title", { count: rows.length })}
         <ChevronDown
           className={`h-3.5 w-3.5 transition-transform ${open ? "rotate-180" : ""}`}
         />
@@ -501,7 +493,7 @@ function RemovedSection({ rows, email }: { rows: Subscription[]; email: string }
       {open && (
         <>
           <p className="mt-3 text-xs text-muted-foreground">
-            移除的航線會保留 30 天，這段期間可以原樣復原 —— 目標價與剩下的訂閱天數都會回來。
+            {t("removed.hint")}
           </p>
           <ul className="mt-4 divide-y divide-border rounded-xl border border-border bg-card/40">
             {rows.map((row) => (
@@ -510,9 +502,9 @@ function RemovedSection({ rows, email }: { rows: Subscription[]; email: string }
                 className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
               >
                 <span className="min-w-0">
-                  <span className="text-sm">{routeLabel(row.route)}</span>
+                  <span className="text-sm">{routeLabel(row.route, locale)}</span>
                   <span className="ml-2 text-xs text-muted-foreground">
-                    目標 {formatTWD(row.target_price)}
+                    {t("removed.target", { price: formatTWD(row.target_price) })}
                   </span>
                 </span>
                 <span className="flex shrink-0 items-center gap-3">
@@ -523,7 +515,7 @@ function RemovedSection({ rows, email }: { rows: Subscription[]; email: string }
                     className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium transition-colors hover:border-primary/40 hover:bg-accent disabled:opacity-50"
                   >
                     <RotateCcw className="h-3 w-3" />
-                    復原
+                    {t("removed.restore")}
                   </button>
                   <button
                     type="button"
@@ -531,14 +523,14 @@ function RemovedSection({ rows, email }: { rows: Subscription[]; email: string }
                     onClick={() => act.mutate({ row, purge: true })}
                     className="text-xs text-muted-foreground transition-colors hover:text-destructive disabled:opacity-50"
                   >
-                    永久刪除
+                    {t("removed.purge")}
                   </button>
                 </span>
               </li>
             ))}
           </ul>
           {act.isError && (
-            <p className="mt-3 text-xs text-destructive">操作失敗，稍後再試。</p>
+            <p className="mt-3 text-xs text-destructive">{t("removed.error")}</p>
           )}
         </>
       )}
@@ -550,10 +542,12 @@ function RemovedSection({ rows, email }: { rows: Subscription[]; email: string }
 function Banner({
   tone,
   onClose,
+  closeLabel,
   children,
 }: {
   tone: "ok" | "bad";
   onClose: () => void;
+  closeLabel: string;
   children: React.ReactNode;
 }) {
   return (
@@ -568,7 +562,7 @@ function Banner({
       <button
         type="button"
         onClick={onClose}
-        aria-label="關閉這則訊息"
+        aria-label={closeLabel}
         className="ml-auto shrink-0 rounded p-0.5 opacity-60 transition-opacity hover:opacity-100"
       >
         <X className="h-4 w-4" />
@@ -585,13 +579,15 @@ async function submitSubscription(payload: {
   target_price: number;
   /** true = 只加進追蹤清單，不進付款流程 */
   draft?: boolean;
+  /** 通知信要用哪個語言寄 */
+  locale: Locale;
 }) {
   const res = await fetch(`${API_URL}/subscribe`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(payload),
   });
-  if (!res.ok) throw new Error("儲存失敗");
+  if (!res.ok) throw new Error("save failed");
 
   //   text/html        -> 綠界收銀台的自動送出表單，直接把瀏覽器交出去
   //   application/json -> 已付費者就地更新目標價，不用重新付款
@@ -615,6 +611,7 @@ function AddRouteDialog({
   existing: string[];
   onClose: () => void;
 }) {
+  const { t, locale } = useT();
   const queryClient = useQueryClient();
   const [origin, setOrigin] = useState("TPE");
   const [destination, setDestination] = useState("");
@@ -633,6 +630,7 @@ function AddRouteDialog({
         destination,
         target_price: targetPrice,
         draft: true,
+        locale,
       }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["subscriptions", email] });
@@ -675,7 +673,7 @@ function AddRouteDialog({
       }}
       role="dialog"
       aria-modal="true"
-      aria-label="新增航線"
+      aria-label={t("dialog.title")}
     >
       <form
         onSubmit={handleSubmit}
@@ -683,15 +681,15 @@ function AddRouteDialog({
       >
         <div className="mb-5 flex items-start justify-between gap-3">
           <div>
-            <p className="font-display text-xl">新增航線</p>
+            <p className="font-display text-xl">{t("dialog.title")}</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              先加進清單，要不要付費訂閱在卡片上決定
+              {t("dialog.subtitle")}
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            aria-label="關閉"
+            aria-label={t("dialog.close")}
             className="shrink-0 rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground"
           >
             <X className="h-4 w-4" />
@@ -700,7 +698,7 @@ function AddRouteDialog({
 
         <div className="grid gap-4 sm:grid-cols-[1fr_auto_1fr]">
           <CityPicker
-            label="從哪裡出發"
+            label={t("dialog.from")}
             value={origin}
             onChange={setOrigin}
             exclude={destination}
@@ -708,13 +706,13 @@ function AddRouteDialog({
           <button
             type="button"
             onClick={swap}
-            aria-label="對調出發地與目的地"
+            aria-label={t("dialog.swap")}
             className="mt-6 hidden h-11 w-11 items-center justify-center self-start rounded-lg border border-border text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground sm:inline-flex"
           >
             <ArrowLeftRight className="h-4 w-4" />
           </button>
           <CityPicker
-            label="要去哪裡"
+            label={t("dialog.to")}
             value={destination}
             onChange={setDestination}
             exclude={origin}
@@ -724,28 +722,29 @@ function AddRouteDialog({
         {route && (
           <p className="mt-4 text-xs text-muted-foreground">
             {pricesQuery.isLoading ? (
-              "查詢目前票價…"
+              t("dialog.priceLoading")
             ) : currentPrice ? (
               <>
-                {routeLabel(route)} 下個月最低約{" "}
-                <span className="text-foreground">{formatTWD(currentPrice)}</span>
-                。目標價設高於這個數字，就會馬上收到通知。
+                {t("dialog.priceHint", {
+                  route: routeLabel(route, locale),
+                  price: formatTWD(currentPrice),
+                })}
                 <button
                   type="button"
                   onClick={() => setPrice(String(Math.round(currentPrice)))}
                   className="ml-2 text-primary underline-offset-2 hover:underline"
                 >
-                  帶入這個價格
+                  {t("dialog.usePrice")}
                 </button>
               </>
             ) : (
-              "查不到這條航線目前的票價，可能是冷門航線或暫時沒有報價。"
+              t("dialog.noPrice")
             )}
           </p>
         )}
 
         <label className="mt-4 block text-xs text-muted-foreground">
-          目標價（TWD）—— 低於這個價格就通知你
+          {t("dialog.targetLabel")}
           <div className="mt-2 flex items-center gap-2 rounded-lg border border-border bg-background/60 px-3 py-2.5 focus-within:border-primary/40">
             <span className="text-sm text-muted-foreground">NT$</span>
             <input
@@ -763,7 +762,7 @@ function AddRouteDialog({
 
         {alreadyWatching && (
           <p className="mt-3 text-xs text-muted-foreground">
-{routeLabel(route)} 已經在你的清單裡，送出會直接更新它的目標價。
+{t("dialog.already", { route: routeLabel(route, locale) })}
           </p>
         )}
 
@@ -778,19 +777,21 @@ function AddRouteDialog({
             ) : (
               <Plus className="h-3.5 w-3.5" />
             )}
-            {destination ? `加入追蹤 ${routeLabel(route)}` : "選一個目的地"}
+            {destination
+              ? t("dialog.add", { route: routeLabel(route, locale) })
+              : t("dialog.pickDest")}
           </button>
           <button
             type="button"
             onClick={onClose}
             className="text-sm text-muted-foreground transition-colors hover:text-foreground"
           >
-            取消
+            {t("dialog.cancel")}
           </button>
         </div>
 
         {save.isError && (
-          <p className="mt-3 text-xs text-destructive">儲存失敗，稍後再試。</p>
+          <p className="mt-3 text-xs text-destructive">{t("card.saveError")}</p>
         )}
       </form>
     </div>
@@ -807,8 +808,9 @@ function RouteCard({
   /** 下個月的最低票價，查不到就不顯示 */
   currentPrice?: number;
 }) {
+  const { t, locale } = useT();
   const queryClient = useQueryClient();
-  const state = cardState(subscription);
+  const state = cardState(subscription, t);
   const [price, setPrice] = useState(String(subscription.target_price));
   const [confirmingCancel, setConfirmingCancel] = useState(false);
   // 任何會扣到錢的動作都先讓使用者確認一次，不直接把人丟去收銀台
@@ -827,7 +829,13 @@ function RouteCard({
 
   const save = useMutation({
     mutationFn: ({ targetPrice }: { targetPrice: number }) =>
-      submitSubscription({ email, origin, destination, target_price: targetPrice }),
+      submitSubscription({
+        email,
+        origin,
+        destination,
+        target_price: targetPrice,
+        locale,
+      }),
     onSuccess: async (result) => {
       if (result?.redirected) return;
       await queryClient.invalidateQueries({ queryKey: ["subscriptions", email] });
@@ -842,7 +850,7 @@ function RouteCard({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ email, route: subscription.route }),
       });
-      if (!res.ok) throw new Error("取消失敗");
+      if (!res.ok) throw new Error("cancel failed");
       return res.json();
     },
     onSuccess: async () => {
@@ -870,10 +878,14 @@ function RouteCard({
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="font-display text-xl">{routeLabel(subscription.route)}</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {routeLabelEn(subscription.route)}
+          <p className="font-display text-xl">
+            {routeLabel(subscription.route, locale)}
           </p>
+          {locale !== "en" && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              {routeLabel(subscription.route, "en")}
+            </p>
+          )}
         </div>
         {state.badge && (
           <span
@@ -894,7 +906,7 @@ function RouteCard({
       <div className="horizon-line mt-5 h-px opacity-50" aria-hidden />
 
       <label className="mt-5 block text-xs text-muted-foreground">
-        目標價（TWD）
+        {t("card.targetPrice")}
         <div className="mt-2 flex items-center gap-2 rounded-lg border border-border bg-background/60 px-3 py-2 focus-within:border-primary/40">
           <span className="text-sm text-muted-foreground">NT$</span>
           <input
@@ -911,8 +923,8 @@ function RouteCard({
 
       <p className="mt-2 text-xs text-muted-foreground">
         {currentPrice
-          ? `目前最低約 ${formatTWD(currentPrice)}（下個月，參考值）`
-          : "目前票價查詢中…"}
+          ? t("card.currentPrice", { price: formatTWD(currentPrice) })
+          : t("card.priceLoading")}
       </p>
       {state.note && (
         <p className="mt-1.5 text-xs text-muted-foreground">{state.note}</p>
@@ -932,14 +944,14 @@ function RouteCard({
                 className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
               >
                 {save.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                更新目標價
+                {t("card.update")}
               </button>
               <button
                 type="button"
                 onClick={() => setPrice(String(subscription.target_price))}
                 className="text-sm text-muted-foreground transition-colors hover:text-foreground"
               >
-                還原
+                {t("card.revert")}
               </button>
             </>
           )
@@ -960,7 +972,7 @@ function RouteCard({
         {confirmingPay && (
           <span className="flex flex-wrap items-center gap-2 text-sm">
             <span className="text-muted-foreground">
-              將前往綠界結帳，每月 {MONTHLY_PRICE}。
+              {t("card.payConfirm", { price: MONTHLY_PRICE })}
             </span>
             <button
               type="button"
@@ -977,7 +989,7 @@ function RouteCard({
               ) : (
                 <CreditCard className="h-3.5 w-3.5" />
               )}
-              前往付款
+              {t("card.goPay")}
             </button>
             <button
               type="button"
@@ -994,11 +1006,7 @@ function RouteCard({
           (confirmingCancel ? (
             <span className="flex items-center gap-2 text-sm">
               <span className="text-muted-foreground">
-                {isActive
-                  ? "確定取消訂閱？"
-                  : state.served
-                    ? "移除後會停止通知，30 天內可以從「最近移除」原樣復原。確定？"
-                    : "從清單移除這條航線？"}
+                {isActive ? t("card.confirmCancel") : t("card.confirmRemove")}
               </span>
               <button
                 type="button"
@@ -1007,14 +1015,14 @@ function RouteCard({
                 className="inline-flex items-center gap-1.5 rounded-lg border border-destructive/40 px-3 py-1.5 text-xs font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
               >
                 {cancel.isPending && <Loader2 className="h-3 w-3 animate-spin" />}
-                確定
+                {t("card.confirmYes")}
               </button>
               <button
                 type="button"
                 onClick={() => setConfirmingCancel(false)}
                 className="text-xs text-muted-foreground transition-colors hover:text-foreground"
               >
-                再想想
+                {t("card.rethink")}
               </button>
             </span>
           ) : (
@@ -1024,17 +1032,17 @@ function RouteCard({
               className="inline-flex items-center gap-1.5 rounded-lg border border-destructive/40 px-4 py-2.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10"
             >
               <XCircle className="h-3.5 w-3.5" />
-              {isActive ? "取消訂閱" : "移除"}
+              {isActive ? t("card.cancel") : t("card.remove")}
             </button>
           ))}
       </div>
 
       {save.isError && (
-        <p className="mt-3 text-xs text-destructive">儲存失敗，稍後再試。</p>
+        <p className="mt-3 text-xs text-destructive">{t("card.saveError")}</p>
       )}
       {cancel.isError && (
         <p className="mt-3 text-xs text-destructive">
-          {isActive ? "取消失敗，稍後再試。" : "移除失敗，稍後再試。"}
+          {isActive ? t("card.cancelError") : t("card.removeError")}
         </p>
       )}
     </form>

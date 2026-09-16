@@ -1,6 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Plane, Bell, CircleSlash } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { useT } from "@/lib/i18n";
 import { useScrollReveal } from "@/hooks/use-scroll-reveal";
 
 export const Route = createFileRoute("/")({
@@ -27,44 +29,45 @@ export const Route = createFileRoute("/")({
 const features = [
   {
     icon: Plane,
-    title: "盯緊熱門航線",
+    titleKey: "home.f1.title",
     subtitle: "Always-on route watching",
-    description: "持續監控台北出發的熱門航線（東京、首爾），自動抓最低票價。",
+    bodyKey: "home.f1.body",
   },
   {
     icon: Bell,
-    title: "達標自動通知",
+    titleKey: "home.f2.title",
     subtitle: "Target-price email alerts",
-    description: "低於你設定的目標價，就寄 email 提醒你，附上立即訂購連結。",
+    bodyKey: "home.f2.body",
   },
   {
     icon: CircleSlash,
-    title: "隨時取消",
+    titleKey: "home.f3.title",
     subtitle: "Cancel anytime",
-    description: "月訂閱制，不想用隨時停，沒有綁約。",
+    bodyKey: "home.f3.body",
   },
 ];
 
 /* 三步驟只複述頁面已宣告的能力：登入 → 設定航線與目標價 → 收 email */
 const steps = [
   {
-    title: "登入帳號",
+    titleKey: "home.s1.title",
     subtitle: "Sign in",
-    description: "用 email 登入，開始建立你的航線清單。",
+    bodyKey: "home.s1.body",
   },
   {
-    title: "設定航線與目標價",
+    titleKey: "home.s2.title",
     subtitle: "Set route & target price",
-    description: "挑一條台北出發的航線，填上你願意出手的價格。",
+    bodyKey: "home.s2.body",
   },
   {
-    title: "等信就好",
+    titleKey: "home.s3.title",
     subtitle: "Wait for the email",
-    description: "票價落到目標價以下，通知信會帶著訂購連結寄給你。",
+    bodyKey: "home.s3.body",
   },
 ];
 
 function LandingPage() {
+  const { t } = useT();
   useScrollReveal();
 
   return (
@@ -77,12 +80,13 @@ function LandingPage() {
           </span>
         </span>
         <span className="flex items-center gap-2.5">
+          <LanguageSwitcher />
           <ThemeToggle />
           <Link
             to="/auth"
             className="rounded-lg border border-border px-4 py-2 text-sm text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
           >
-            Sign in / 登入
+            {t("nav.signIn")}
           </Link>
         </span>
       </header>
@@ -100,7 +104,7 @@ function LandingPage() {
                 className="h-1.5 w-1.5 rounded-full bg-horizon"
                 aria-hidden
               />
-              台北出發 · 東京、首爾等熱門航線
+              {t("home.heroBadge")}
             </p>
 
             <h1
@@ -114,7 +118,7 @@ function LandingPage() {
               className="fade-up mx-auto mt-8 max-w-2xl font-display text-2xl leading-relaxed text-foreground sm:text-3xl"
               style={{ animationDelay: "0.2s" }}
             >
-              設定航線與目標價，機票降價就通知你
+              {t("home.heroTitle")}
             </p>
 
             <p
@@ -132,7 +136,7 @@ function LandingPage() {
                 to="/auth"
                 className="inline-flex items-center justify-center rounded-xl bg-primary px-9 py-3.5 text-base font-semibold text-primary-foreground transition-all hover:brightness-110 glow-primary"
               >
-                Sign in / 登入
+                {t("nav.signIn")}
               </Link>
               <span className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
                 Monthly · cancel anytime
@@ -161,7 +165,7 @@ function LandingPage() {
                 className="font-display mt-3 text-3xl tracking-tight sm:text-4xl"
                 style={{ animationDelay: "0.1s" }}
               >
-                替你守著票價，直到它便宜為止
+                {t("home.midTitle")}
               </h2>
             </div>
             <p
@@ -169,14 +173,14 @@ function LandingPage() {
               className="max-w-sm text-sm leading-relaxed text-muted-foreground"
               style={{ animationDelay: "0.25s" }}
             >
-              不用每天打開比價網站重刷一次，把航線交給我們就好。
+              {t("home.midBody")}
             </p>
           </div>
 
           <div className="grid gap-5 sm:grid-cols-3">
             {features.map((feature, i) => (
               <article
-                key={feature.title}
+                key={feature.titleKey}
                 data-reveal="card"
                 className="surface-sheen rounded-2xl border border-border bg-card p-7 transition-colors hover:border-primary/40"
                 style={{ animationDelay: `${i * 0.14}s` }}
@@ -195,7 +199,7 @@ function LandingPage() {
                 </div>
 
                 <h3 className="font-display mt-7 text-xl tracking-tight">
-                  {feature.title}
+                  {t(feature.titleKey)}
                 </h3>
                 <p className="mt-1 text-xs uppercase tracking-[0.14em] text-muted-foreground">
                   {feature.subtitle}
@@ -204,7 +208,7 @@ function LandingPage() {
                 <div className="my-5 h-px bg-border" aria-hidden />
 
                 <p className="text-sm leading-relaxed text-muted-foreground">
-                  {feature.description}
+                  {t(feature.bodyKey)}
                 </p>
               </article>
             ))}
@@ -224,13 +228,13 @@ function LandingPage() {
               className="font-display mt-3 text-3xl tracking-tight sm:text-4xl"
               style={{ animationDelay: "0.1s" }}
             >
-              三步就好
+              {t("home.stepsTitle")}
             </h2>
 
             <ol className="mt-14 grid gap-12 sm:grid-cols-3 sm:gap-0">
               {steps.map((step, i) => (
                 <li
-                  key={step.title}
+                  key={step.titleKey}
                   className="relative sm:border-l sm:border-border sm:px-8 sm:first:border-l-0 sm:first:pl-0 sm:last:pr-0"
                 >
                   <span
@@ -251,7 +255,7 @@ function LandingPage() {
                     className="font-display text-2xl tracking-tight"
                     style={{ animationDelay: `${0.35 + i * 0.18}s` }}
                   >
-                    {step.title}
+                    {t(step.titleKey)}
                   </h3>
                   <p
                     data-reveal="rise"
@@ -265,7 +269,7 @@ function LandingPage() {
                     className="mt-4 text-sm leading-relaxed text-muted-foreground"
                     style={{ animationDelay: `${0.6 + i * 0.18}s` }}
                   >
-                    {step.description}
+                    {t(step.bodyKey)}
                   </p>
                 </li>
               ))}
@@ -283,7 +287,7 @@ function LandingPage() {
               data-reveal="mask"
               className="font-display font-black text-4xl leading-tight tracking-tight sm:text-5xl"
             >
-              下一趟旅程，等它降價再出發
+              {t("home.ctaTitle")}
             </h2>
             <p
               data-reveal="rise"
@@ -297,7 +301,7 @@ function LandingPage() {
                 to="/auth"
                 className="inline-flex items-center justify-center rounded-xl border border-primary/50 px-9 py-3.5 text-base font-medium text-primary transition-colors hover:bg-primary/10"
               >
-                Sign in / 登入
+                {t("nav.signIn")}
               </Link>
             </div>
           </div>

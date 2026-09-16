@@ -2,6 +2,8 @@ import { useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Plane } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { useT } from "@/lib/i18n";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/auth")({
@@ -19,6 +21,7 @@ export const Route = createFileRoute("/auth")({
 });
 
 function AuthPage() {
+  const { t } = useT();
   const navigate = useNavigate();
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
@@ -71,7 +74,10 @@ function AuthPage() {
             Flight Price Notifier
           </span>
         </Link>
-        <ThemeToggle />
+        <span className="flex items-center gap-2.5">
+          <LanguageSwitcher />
+          <ThemeToggle />
+        </span>
       </header>
 
       <main className="relative flex flex-1 items-center justify-center px-6 pb-24 pt-4">
@@ -88,12 +94,10 @@ function AuthPage() {
                 {mode === "signin" ? "Returning traveller" : "New traveller"}
               </p>
               <h1 className="font-display text-3xl tracking-tight sm:text-4xl">
-                {mode === "signin" ? "Welcome back．登入" : "Create account．註冊"}
+                {t(mode === "signin" ? "auth.signinTitle" : "auth.signupTitle")}
               </h1>
               <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-                {mode === "signin"
-                  ? "Sign in to manage your fare alerts．登入後管理你的票價提醒"
-                  : "Create an account to start tracking fares．建立帳號開始追蹤票價"}
+                {t(mode === "signin" ? "auth.signinSub" : "auth.signupSub")}
               </p>
             </div>
 
@@ -135,7 +139,7 @@ function AuthPage() {
                   className="w-full rounded-lg border border-input bg-secondary/40 px-3.5 py-2.5 text-sm outline-none transition-colors placeholder:text-muted-foreground/70 hover:border-border focus:border-primary focus:ring-2 focus:ring-ring/40"
                 />
                 <p className="mt-2 text-xs text-muted-foreground">
-                  At least 6 characters．至少 6 個字元
+                  {t("auth.pwHint")}
                 </p>
               </div>
 
@@ -156,10 +160,8 @@ function AuthPage() {
                 className="w-full rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground transition-all hover:brightness-110 disabled:opacity-60 glow-primary"
               >
                 {loading
-                  ? "Please wait…"
-                  : mode === "signin"
-                    ? "Sign in / 登入"
-                    : "Create account / 註冊"}
+                  ? "…"
+                  : t(mode === "signin" ? "auth.signinCta" : "auth.signupCta")}
               </button>
             </form>
 
@@ -184,7 +186,7 @@ function AuthPage() {
             className="fade-up mt-6 text-center text-xs leading-relaxed text-muted-foreground"
             style={{ animationDelay: "0.2s" }}
           >
-            Your email is only used for fare alerts．你的信箱只用來寄票價提醒
+            {t("auth.privacy")}
           </p>
         </div>
       </main>

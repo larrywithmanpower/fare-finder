@@ -33,3 +33,8 @@ dist-ssr
 
 # 課程 skills（本機用，含 AWS 帳號 ID，不推上 public repo）
 .claude/
+
+# 由 scripts/build-cities.py 產生並複製進各 Lambda 目錄，不進版控
+lambda/*/l10n.py
+lambda/*/cities.json
+lambda/_shared/cities.json

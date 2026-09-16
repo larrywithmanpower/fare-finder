@@ -166,6 +166,8 @@ def handler(event, context):
             # 中文城市名存在訂閱列上, 通知信直接用, 不必再維護一份對照表
             "origin_name": sub.get("origin_name"),
             "destination_name": sub.get("destination_name"),
+            # 訂閱時選的介面語言, 通知信用同一個語言寄
+            "locale": sub.get("locale"),
             "target_price": float(target),
             "cheapest": cheapest,
         }

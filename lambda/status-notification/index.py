@@ -5,10 +5,13 @@ producer 是 flight-ecpay-return（welcome）與 flight-cancel-subscription（ca
 """
 import json
 import os
+import re
 import urllib.error
 import urllib.request
 
 import boto3
+
+import l10n
 
 SECRETS = boto3.client("secretsmanager")
 
@@ -16,12 +19,12 @@ UA = "Mozilla/5.0 (compatible; flight-price-notifier/1.0)"
 RESEND_API = "https://api.resend.com/emails"
 SITE_URL = os.environ.get("SITE_URL", "https://fare-finder-three.vercel.app")
 
-ROUTE_LABELS = {
-    "TPE-TYO": ("台北", "東京"),
-    "TPE-SEL": ("台北", "首爾"),
-}
-
 _secret_cache = None
+
+
+def _strip(html):
+    """純文字版本用: 把文案裡的 <strong> 之類標籤拿掉"""
+    return re.sub(r"<[^>]+>", "", html)
 
 
 def get_resend():
@@ -31,72 +34,79 @@ def get_resend():
     return _secret_cache
 
 
-def route_label(msg):
-    """中文航線名的三層來源: 訊息 -> 舊對照表 -> 直接顯示代碼"""
-    if msg.get("route_label"):
+def route_label(msg, locale):
+    """中文航線名的三層來源: 訊息帶的 -> 城市表 -> 直接顯示代碼"""
+    if msg.get("route_label") and locale == l10n.DEFAULT_LOCALE:
         return msg["route_label"]
-    route = msg["route"]
-    origin, dest = ROUTE_LABELS.get(route, (route.split("-")[0], route.split("-")[-1]))
-    return "%s ✈ %s" % (origin, dest)
+    return l10n.route_label(msg["route"], locale)
 
 
-def _shell(inner):
+def _shell(inner, locale):
     return (
         '<div style="font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif;'
         'max-width:520px;margin:0 auto;padding:24px;color:#1a1a1a">'
         "%s"
         '<hr style="border:none;border-top:1px solid #e5e5e5;margin:24px 0">'
         '<p style="font-size:12px;color:#888">Flight Price Notifier · '
-        '<a href="%s/dashboard" style="color:#888">管理我的訂閱</a></p>'
-        "</div>" % (inner, SITE_URL)
+        '<a href="%s/dashboard" style="color:#888">%s</a></p>'
+        "</div>" % (inner, SITE_URL, l10n.tr(locale, "shell.manage"))
     )
 
 
 def render_welcome(msg):
-    label = route_label(msg)
+    locale = l10n.normalize(msg.get("locale"))
+    label = route_label(msg, locale)
     end = msg.get("current_period_end_date", "")
     amount = msg.get("amount", "300")
-    subject = "訂閱成功：%s 開始為你盯票價" % label
+    tr = lambda key, **kw: l10n.tr(locale, key, **kw)
+
+    subject = tr("welcome.subject", route=label)
     html = _shell(
-        '<h2 style="margin:0 0 16px">訂閱成功 🎉</h2>'
-        "<p>你已經訂閱 <strong>%s</strong> 的降價通知，我們每 30 分鐘查一次最低票價，"
-        "低於你設定的目標價就立刻寄信給你。</p>"
+        '<h2 style="margin:0 0 16px">%s</h2><p>%s</p>'
         '<table style="font-size:14px;border-collapse:collapse;margin:16px 0">'
-        '<tr><td style="padding:4px 12px 4px 0;color:#666">方案</td><td>%s 月訂閱</td></tr>'
-        '<tr><td style="padding:4px 12px 4px 0;color:#666">月費</td><td>NT$%s</td></tr>'
-        '<tr><td style="padding:4px 12px 4px 0;color:#666">本期到期日</td><td>%s</td></tr>'
+        '<tr><td style="padding:4px 12px 4px 0;color:#666">%s</td><td>%s</td></tr>'
+        '<tr><td style="padding:4px 12px 4px 0;color:#666">%s</td><td>NT$%s</td></tr>'
+        '<tr><td style="padding:4px 12px 4px 0;color:#666">%s</td><td>%s</td></tr>'
         "</table>"
-        '<p style="font-size:13px;color:#666">隨時可以在控制台取消，取消後在本期結束前仍然收得到通知。</p>'
-        % (label, label, amount, end)
+        '<p style="font-size:13px;color:#666">%s</p>'
+        % (tr("welcome.title"), tr("welcome.body", route=label),
+           tr("welcome.plan"), tr("welcome.planValue", route=label),
+           tr("welcome.fee"), amount,
+           tr("welcome.periodEnd"), end,
+           tr("welcome.footer")),
+        locale,
     )
-    text = (
-        "訂閱成功\n\n"
-        "你已經訂閱 %s 的降價通知。\n"
-        "方案：%s 月訂閱\n月費：NT$%s\n本期到期日：%s\n\n"
-        "隨時可以在控制台取消，取消後在本期結束前仍然收得到通知。\n%s/dashboard\n"
-        % (label, label, amount, end, SITE_URL)
+    text = "%s\n\n%s\n%s: %s\n%s: NT$%s\n%s: %s\n\n%s\n%s/dashboard\n" % (
+        tr("welcome.title"),
+        _strip(tr("welcome.body", route=label)),
+        tr("welcome.plan"), tr("welcome.planValue", route=label),
+        tr("welcome.fee"), amount,
+        tr("welcome.periodEnd"), end,
+        tr("welcome.footer"), SITE_URL,
     )
     return subject, html, text
 
 
 def render_cancel(msg):
-    label = route_label(msg)
+    locale = l10n.normalize(msg.get("locale"))
+    label = route_label(msg, locale)
     end = msg.get("current_period_end_date", "")
-    subject = "已取消訂閱：%s" % label
+    tr = lambda key, **kw: l10n.tr(locale, key, **kw)
+
+    subject = tr("cancel.subject", route=label)
     html = _shell(
-        '<h2 style="margin:0 0 16px">已取消訂閱</h2>'
-        "<p>你取消了 <strong>%s</strong> 的訂閱，之後不會再扣款。</p>"
-        '<p style="background:#f5f5f5;padding:12px 16px;border-radius:6px">'
-        "本期已經付過費，<strong>%s 之前仍然會收到降價通知</strong>，到期後自動停止。</p>"
-        '<p style="font-size:13px;color:#666">改變主意的話，隨時可以回控制台重新訂閱。</p>'
-        % (label, end)
+        '<h2 style="margin:0 0 16px">%s</h2><p>%s</p>'
+        '<p style="background:#f5f5f5;padding:12px 16px;border-radius:6px">%s</p>'
+        '<p style="font-size:13px;color:#666">%s</p>'
+        % (tr("cancel.title"), tr("cancel.body", route=label),
+           tr("cancel.grace", date=end), tr("cancel.footer")),
+        locale,
     )
-    text = (
-        "已取消訂閱\n\n"
-        "你取消了 %s 的訂閱，之後不會再扣款。\n"
-        "本期已經付過費，%s 之前仍然會收到降價通知，到期後自動停止。\n\n"
-        "改變主意的話，隨時可以回控制台重新訂閱。\n%s/dashboard\n"
-        % (label, end, SITE_URL)
+    text = "%s\n\n%s\n%s\n\n%s\n%s/dashboard\n" % (
+        tr("cancel.title"),
+        _strip(tr("cancel.body", route=label)),
+        _strip(tr("cancel.grace", date=end)),
+        tr("cancel.footer"), SITE_URL,
     )
     return subject, html, text
 

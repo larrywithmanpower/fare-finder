@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Moon, Sun } from "lucide-react";
+import { useT } from "@/lib/i18n";
 
 type Theme = "light" | "dark";
 
@@ -10,6 +11,7 @@ function currentTheme(): Theme {
 }
 
 export function ThemeToggle() {
+  const { t } = useT();
   const [theme, setTheme] = useState<Theme>("dark");
 
   // 只在瀏覽器端讀，避免 SSR 與第一次繪製對不起來
@@ -30,8 +32,8 @@ export function ThemeToggle() {
     <button
       type="button"
       onClick={toggle}
-      aria-label={theme === "light" ? "切換到深色" : "切換到淺色"}
-      title={theme === "light" ? "切換到深色" : "切換到淺色"}
+      aria-label={t(theme === "light" ? "theme.toDark" : "theme.toLight")}
+      title={t(theme === "light" ? "theme.toDark" : "theme.toLight")}
       className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-secondary/60 text-secondary-foreground transition-colors hover:border-primary/40 hover:bg-accent"
     >
       {theme === "light" ? (

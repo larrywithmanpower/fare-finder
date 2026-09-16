@@ -9,6 +9,7 @@ import {
 import { useEffect } from "react";
 
 import { supabase } from "../integrations/supabase/client";
+import { LocaleProvider } from "@/lib/i18n";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 
 function NotFoundComponent() {
@@ -130,10 +131,12 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {/* SPA 模式下由 HeadContent 套用各路由的 title / meta */}
-      <HeadContent />
-      {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-      <Outlet />
+      <LocaleProvider>
+        {/* SPA 模式下由 HeadContent 套用各路由的 title / meta */}
+        <HeadContent />
+        {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+        <Outlet />
+      </LocaleProvider>
     </QueryClientProvider>
   );
 }

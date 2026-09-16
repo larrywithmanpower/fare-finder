@@ -20,6 +20,8 @@ from decimal import Decimal, InvalidOperation
 
 import boto3
 
+import l10n
+
 # 可訂閱的城市白名單（IATA「城市」代碼，不是機場代碼: 要 TYO 不要 NRT）
 # ⚠️ 前端 src/lib/cities.ts 是同一份, 加城市要兩邊都加
 CITIES = {
@@ -49,9 +51,9 @@ LEGACY_PLANS = {"tokyo": ("TPE", "TYO"), "seoul": ("TPE", "SEL")}
 IATA_RE = re.compile(r"^[A-Z]{3}$")
 
 
-def route_label(origin, destination):
-    """清單內的給中文名, 使用者自己打的代碼就原樣顯示"""
-    return "%s ✈ %s" % (CITIES.get(origin, origin), CITIES.get(destination, destination))
+def route_label(origin, destination, locale=l10n.DEFAULT_LOCALE):
+    """清單內的給當地語言名, 使用者自己打的代碼就原樣顯示"""
+    return "%s ✈ %s" % (l10n.city_name(origin, locale), l10n.city_name(destination, locale))
 
 
 def valid_city(code):
@@ -223,14 +225,18 @@ def handler(event, context):
         return _resp_json(400, {"error": "target_price 必須大於 0"})
 
     route = "%s-%s" % (origin, destination)
-    label = route_label(origin, destination)
+    # 使用者當下選的介面語言, 通知信就用這個語言寄
+    locale = l10n.normalize(body.get("locale"))
+    label = route_label(origin, destination, locale)
     now = datetime.now(timezone.utc).isoformat()
 
     existing = TABLE.get_item(Key={"email": email, "route": route}).get("Item") or {}
+    # locale 可能是 DynamoDB 保留字, 一律走 ExpressionAttributeNames
+    NAMES = {"#loc": "locale"}
 
     common_set = (
         "plan_name = :p, origin = :o, destination = :d, "
-        "origin_name = :on, destination_name = :dn, "
+        "origin_name = :on, destination_name = :dn, #loc = :loc, "
         "target_price = :t, currency = :c, updated_at = :u, "
         "created_at = if_not_exists(created_at, :u)"
     )
@@ -240,8 +246,9 @@ def handler(event, context):
         ":p": label,
         ":o": origin,
         ":d": destination,
-        ":on": CITIES.get(origin, origin),
-        ":dn": CITIES.get(destination, destination),
+        ":on": l10n.city_name(origin, locale),
+        ":dn": l10n.city_name(destination, locale),
+        ":loc": locale,
         ":t": target_price,
         ":c": "TWD",
         ":u": now,
@@ -257,6 +264,7 @@ def handler(event, context):
                 "SET " + common_set + ", subscription_status = :s "
                 "REMOVE removed_at, status_before_remove"
             ),
+            ExpressionAttributeNames=NAMES,
             ExpressionAttributeValues=dict(common_values, **{":s": restored}),
         )
         print("restored %s %s -> %s" % (email, route, restored))
@@ -272,6 +280,7 @@ def handler(event, context):
         TABLE.update_item(
             Key={"email": email, "route": route},
             UpdateExpression="SET " + common_set + ", subscription_status = :s",
+            ExpressionAttributeNames=NAMES,
             ExpressionAttributeValues=dict(common_values, **{":s": "draft"}),
         )
         print("draft %s %s target=%s" % (email, route, target_price))
@@ -288,6 +297,7 @@ def handler(event, context):
         TABLE.update_item(
             Key={"email": email, "route": route},
             UpdateExpression="SET " + common_set,
+            ExpressionAttributeNames=NAMES,
             ExpressionAttributeValues=common_values,
         )
         print("updated target only %s %s status=%s target=%s"
@@ -311,6 +321,7 @@ def handler(event, context):
         UpdateExpression=(
             "SET " + common_set + ", subscription_status = :s, merchant_trade_no = :m"
         ),
+        ExpressionAttributeNames=NAMES,
         ExpressionAttributeValues=dict(common_values, **{
             ":s": "pending_payment",
             ":m": trade_no,

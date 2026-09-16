@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown, Search } from "lucide-react";
 import { CITIES, cityOf, matchCity, type City } from "@/lib/cities";
+import { useT } from "@/lib/i18n";
 
 /**
  * 城市選擇器 —— 可搜尋的下拉，中文名／英文名／IATA 代碼都能打。
@@ -18,6 +19,7 @@ export function CityPicker({
   /** 另一端已經選的城市，不讓使用者選成同一個 */
   exclude?: string;
 }) {
+  const { t, locale } = useT();
   const [open, setOpen] = useState(false);
   const [keyword, setKeyword] = useState("");
   const boxRef = useRef<HTMLDivElement>(null);
@@ -81,10 +83,14 @@ export function CityPicker({
       >
         <span className="min-w-0">
           <span className="block truncate text-base text-foreground">
-            {selected ? selected.zh : value || "選擇城市"}
+            {selected ? selected.name[locale] : value || t("picker.select")}
           </span>
           <span className="block truncate text-xs text-muted-foreground">
-            {selected ? `${selected.en} · ${selected.code}` : value ? "自訂代碼" : "中文、英文或代碼都能搜"}
+            {selected
+              ? `${selected.name.en} · ${selected.code}`
+              : value
+                ? t("picker.custom")
+                : t("picker.hint")}
           </span>
         </span>
         <ChevronDown
@@ -100,7 +106,7 @@ export function CityPicker({
               ref={inputRef}
               value={keyword}
               onChange={(event) => setKeyword(event.target.value)}
-              placeholder="搜尋城市，或直接打 IATA 三碼"
+              placeholder={t("picker.search")}
               className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
             />
           </div>
@@ -112,15 +118,17 @@ export function CityPicker({
                 onClick={() => pick(customCode)}
                 className="flex w-full items-center justify-between px-3 py-2 text-left text-sm transition-colors hover:bg-accent"
               >
-                <span className="text-foreground">使用代碼 {customCode}</span>
-                <span className="text-xs text-muted-foreground">自訂</span>
+                <span className="text-foreground">
+                  {t("picker.useCode", { code: customCode })}
+                </span>
+                <span className="text-xs text-muted-foreground">{t("picker.customTag")}</span>
               </button>
             )}
 
             {groups.map((group) => (
               <div key={group.area}>
                 <p className="px-3 pb-1 pt-2.5 text-[0.65rem] uppercase tracking-[0.18em] text-muted-foreground">
-                  {group.area}
+                  {t(`area.${group.area}`)}
                 </p>
                 {group.cities.map((city) => (
                   <button
@@ -130,8 +138,14 @@ export function CityPicker({
                     className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left transition-colors hover:bg-accent"
                   >
                     <span className="min-w-0">
-                      <span className="text-sm text-foreground">{city.zh}</span>
-                      <span className="ml-2 text-xs text-muted-foreground">{city.en}</span>
+                      <span className="text-sm text-foreground">
+                        {city.name[locale]}
+                      </span>
+                      {city.name[locale] !== city.name.en && (
+                        <span className="ml-2 text-xs text-muted-foreground">
+                          {city.name.en}
+                        </span>
+                      )}
                     </span>
                     <span className="flex shrink-0 items-center gap-2">
                       <span className="text-xs text-muted-foreground">{city.code}</span>
@@ -144,9 +158,7 @@ export function CityPicker({
 
             {!customCode && groups.length === 0 && (
               <p className="px-3 py-6 text-center text-sm text-muted-foreground">
-                找不到「{keyword}」。
-                <br />
-                知道代碼的話直接打三碼，例如 LON。
+                {t("picker.notFound", { keyword })}
               </p>
             )}
           </div>
