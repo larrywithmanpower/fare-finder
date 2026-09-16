@@ -750,7 +750,7 @@ function RouteCard({
                 className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
               >
                 {save.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                儲存目標價
+                更新目標價
               </button>
               <button
                 type="button"
