@@ -247,6 +247,25 @@ def handler(event, context):
         ":u": now,
     }
 
+    # 從「最近移除」復原：回到移除前的狀態, 不要一律變成未訂閱。
+    # 這樣本期還沒用完的寬限期（cancelled + current_period_end）才救得回來。
+    if body.get("draft") and existing.get("subscription_status") == "removed":
+        restored = existing.get("status_before_remove") or "draft"
+        TABLE.update_item(
+            Key={"email": email, "route": route},
+            UpdateExpression=(
+                "SET " + common_set + ", subscription_status = :s "
+                "REMOVE removed_at, status_before_remove"
+            ),
+            ExpressionAttributeValues=dict(common_values, **{":s": restored}),
+        )
+        print("restored %s %s -> %s" % (email, route, restored))
+        return _resp_json(200, {
+            "ok": True, "restored": True, "email": email, "route": route,
+            "plan_name": label, "target_price": float(target_price),
+            "currency": "TWD", "subscription_status": restored,
+        })
+
     # 「先加進追蹤清單」：建立 draft 列就好, 付款留到使用者在卡片上按下去才做。
     # draft 不在 parser-wrapper 的計費狀態裡, 所以不會去查票價, 也不會寄信。
     if body.get("draft") and not _still_served(existing):

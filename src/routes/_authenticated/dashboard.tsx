@@ -501,7 +501,7 @@ function RemovedSection({ rows, email }: { rows: Subscription[]; email: string }
       {open && (
         <>
           <p className="mt-3 text-xs text-muted-foreground">
-            移除的航線會保留 30 天，這段期間可以連同目標價一起復原。
+            移除的航線會保留 30 天，這段期間可以原樣復原 —— 目標價與剩下的訂閱天數都會回來。
           </p>
           <ul className="mt-4 divide-y divide-border rounded-xl border border-border bg-card/40">
             {rows.map((row) => (
@@ -997,7 +997,7 @@ function RouteCard({
                 {isActive
                   ? "確定取消訂閱？"
                   : state.served
-                    ? "移除後會立刻停止通知，本期剩下的天數不保留。確定？"
+                    ? "移除後會停止通知，30 天內可以從「最近移除」原樣復原。確定？"
                     : "從清單移除這條航線？"}
               </span>
               <button

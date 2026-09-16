@@ -113,6 +113,17 @@
     border-color: var(--color-border);
   }
 
+  /* Tailwind v4 的 Preflight 把按鈕游標改成 default，手動補回手指游標 */
+  button:not(:disabled),
+  [role="button"]:not(:disabled),
+  summary {
+    cursor: pointer;
+  }
+
+  button:disabled {
+    cursor: not-allowed;
+  }
+
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
