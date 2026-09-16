@@ -100,6 +100,13 @@ def handler(event, context):
         return _resp(400, {"error": "email 與 route 必填"})
 
     row = TABLE.get_item(Key={"email": email, "route": route}).get("Item") or {}
+
+    # 從來沒扣過款的列（draft / pending_payment / expired）沒有什麼好「取消」的,
+    # 直接從追蹤清單移除, 不必去打綠界的取消 API
+    if row and row.get("subscription_status") != "active":
+        TABLE.delete_item(Key={"email": email, "route": route})
+        print("removed %s %s status=%s" % (email, route, row.get("subscription_status")))
+        return _resp(200, {"ok": True, "removed": True, "route": route})
     if not row:
         return _resp(404, {"error": "找不到這筆訂閱"})
 

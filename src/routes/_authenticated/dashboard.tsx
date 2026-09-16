@@ -35,6 +35,7 @@ const MONTHLY_PRICE = "NT$300";
 // M2 起每列都有 subscription_status；M1 時代建的舊資料沒有這個欄位，
 // 那種列在後端會被付費閘門擋掉，所以這裡也當成「未訂閱」處理。
 type SubscriptionStatus =
+  | "draft"
   | "pending_payment"
   | "active"
   | "cancelled"
@@ -69,6 +70,14 @@ function cardState(sub: Subscription): CardState {
       note: sub.current_period_end_date
         ? `本期至 ${sub.current_period_end_date}，到期自動續訂`
         : null,
+    };
+  }
+  if (status === "draft") {
+    return {
+      served: false,
+      badge: { label: "未訂閱", icon: Clock, tone: "muted" },
+      cta: "訂閱並付款",
+      note: `每月 ${MONTHLY_PRICE}，訂閱後才會開始為你盯這條航線`,
     };
   }
   if (status === "pending_payment") {
@@ -320,6 +329,8 @@ async function submitSubscription(payload: {
   origin: string;
   destination: string;
   target_price: number;
+  /** true = 只加進追蹤清單，不進付款流程 */
+  draft?: boolean;
 }) {
   const res = await fetch(`${API_URL}/subscribe`, {
     method: "POST",
@@ -358,12 +369,20 @@ function AddRouteSection({
 
   const save = useMutation({
     mutationFn: (targetPrice: number) =>
-      submitSubscription({ email, origin, destination, target_price: targetPrice }),
-    onSuccess: async (result) => {
-      if (result?.redirected) return; // 已經跳去綠界了，不用再更新畫面
+      submitSubscription({
+        email,
+        origin,
+        destination,
+        target_price: targetPrice,
+        draft: true,
+      }),
+    onSuccess: async () => {
       setDestination("");
       setPrice("");
       await queryClient.invalidateQueries({ queryKey: ["subscriptions", email] });
+      document
+        .querySelector('[aria-label="我的航線"]')
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
     },
   });
 
@@ -381,7 +400,7 @@ function AddRouteSection({
 
   return (
     <section
-      className="fade-up mt-16"
+      className="fade-up relative z-30 mt-16"
       style={{ animationDelay: "0.22s" }}
       aria-label="新增航線"
     >
@@ -435,7 +454,7 @@ function AddRouteSection({
 
         {alreadyWatching && (
           <p className="mt-3 text-xs text-muted-foreground">
-            {routeLabel(route)} 已經在你的清單裡，送出會直接更新它的目標價。
+{routeLabel(route)} 已經在你的清單裡，送出會直接更新它的目標價。
           </p>
         )}
 
@@ -450,10 +469,10 @@ function AddRouteSection({
             ) : (
               <Plus className="h-3.5 w-3.5" />
             )}
-            {destination ? `訂閱 ${routeLabel(route)}` : "選一個目的地"}
+            {destination ? `加入追蹤 ${routeLabel(route)}` : "選一個目的地"}
           </button>
           <span className="text-xs text-muted-foreground">
-            月費 {MONTHLY_PRICE}，隨時可取消
+            先加進清單，要不要付費訂閱在上面的卡片決定
           </span>
         </div>
 
@@ -477,6 +496,7 @@ function RouteCard({
   const [price, setPrice] = useState(String(subscription.target_price));
   const [confirmingCancel, setConfirmingCancel] = useState(false);
   const [origin, destination] = splitRoute(subscription.route);
+  const isActive = subscription.subscription_status === "active";
 
   // 後端改了目標價（例如另一個分頁存的）就跟著更新，但別蓋掉正在打的字
   const [baseline, setBaseline] = useState(String(subscription.target_price));
@@ -496,6 +516,7 @@ function RouteCard({
     },
   });
 
+  // 同一個端點：active 的列是跟綠界取消扣款，其他狀態直接從清單移除
   const cancel = useMutation({
     mutationFn: async () => {
       const res = await fetch(`${API_URL}/cancel`, {
@@ -606,11 +627,14 @@ function RouteCard({
           </button>
         )}
 
-        {/* 只有真的在扣款中的人才需要退訂；已取消的人不必再取消一次 */}
-        {subscription.subscription_status === "active" &&
+        {/* active 要退訂（跟綠界取消扣款）；沒付過款的列則是單純從清單移除 */}
+        {(subscription.subscription_status === "active" ||
+          !state.served) &&
           (confirmingCancel ? (
             <span className="flex items-center gap-2 text-sm">
-              <span className="text-muted-foreground">確定取消訂閱？</span>
+              <span className="text-muted-foreground">
+                {isActive ? "確定取消訂閱？" : "從清單移除這條航線？"}
+              </span>
               <button
                 type="button"
                 disabled={cancel.isPending}
@@ -634,7 +658,7 @@ function RouteCard({
               onClick={() => setConfirmingCancel(true)}
               className="text-sm text-muted-foreground transition-colors hover:text-foreground"
             >
-              取消訂閱
+              {isActive ? "取消訂閱" : "移除"}
             </button>
           ))}
       </div>
@@ -643,7 +667,9 @@ function RouteCard({
         <p className="mt-3 text-xs text-destructive">儲存失敗，稍後再試。</p>
       )}
       {cancel.isError && (
-        <p className="mt-3 text-xs text-destructive">取消失敗，稍後再試。</p>
+        <p className="mt-3 text-xs text-destructive">
+          {isActive ? "取消失敗，稍後再試。" : "移除失敗，稍後再試。"}
+        </p>
       )}
     </form>
   );

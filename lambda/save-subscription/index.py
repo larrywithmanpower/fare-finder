@@ -247,6 +247,21 @@ def handler(event, context):
         ":u": now,
     }
 
+    # 「先加進追蹤清單」：建立 draft 列就好, 付款留到使用者在卡片上按下去才做。
+    # draft 不在 parser-wrapper 的計費狀態裡, 所以不會去查票價, 也不會寄信。
+    if body.get("draft") and not _still_served(existing):
+        TABLE.update_item(
+            Key={"email": email, "route": route},
+            UpdateExpression="SET " + common_set + ", subscription_status = :s",
+            ExpressionAttributeValues=dict(common_values, **{":s": "draft"}),
+        )
+        print("draft %s %s target=%s" % (email, route, target_price))
+        return _resp_json(200, {
+            "ok": True, "draft": True, "email": email, "route": route,
+            "plan_name": label, "target_price": float(target_price),
+            "currency": "TWD", "subscription_status": "draft",
+        })
+
     # 還在服務期內的人：只改目標價，不動狀態、不重新付款
     if _still_served(existing):
         TABLE.update_item(
