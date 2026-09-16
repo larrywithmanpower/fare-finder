@@ -77,6 +77,7 @@ type Subscription = {
   subscription_status?: SubscriptionStatus;
   current_period_end_date?: string;
   removed_at?: string;
+  created_at?: string;
 };
 
 type CardState = {
@@ -185,9 +186,12 @@ function DashboardPage() {
     },
   });
 
+  // 照加入的先後排，新加的排在最後面。
+  // 用航線代碼排序的話，新增一條就會把既有的卡片洗牌（TPE-SYD 會插進 SEL 和 TYO 中間）
   const allRows = useMemo(
     () =>
       [...(subscriptionsQuery.data ?? [])].sort((a, b) =>
+        (a.created_at ?? "").localeCompare(b.created_at ?? "") ||
         a.route.localeCompare(b.route),
       ),
     [subscriptionsQuery.data],
@@ -197,7 +201,11 @@ function DashboardPage() {
     [allRows],
   );
   const removed = useMemo(
-    () => allRows.filter((item) => item.subscription_status === "removed"),
+    () =>
+      allRows
+        .filter((item) => item.subscription_status === "removed")
+        // 剛移除的放最上面，最可能是要救回來的那筆
+        .sort((a, b) => (b.removed_at ?? "").localeCompare(a.removed_at ?? "")),
     [allRows],
   );
 
