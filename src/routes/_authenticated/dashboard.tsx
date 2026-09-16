@@ -142,11 +142,16 @@ function DashboardPage() {
   // 綠界付完款是導回 /dashboard?purchase=success，讀完就把參數從網址清掉，
   // 免得重新整理又跳一次橫幅
   const [purchase, setPurchase] = useState<string | null>(null);
+  // 剛付款的那一條航線。使用者可能同時有好幾條沒付款的，
+  // 所以只盯這一條有沒有啟用，不能看「清單裡還有沒有未付款的」
+  const [paidRoute, setPaidRoute] = useState<string | null>(null);
   const [waiting, setWaiting] = useState(false);
   useEffect(() => {
-    const value = new URLSearchParams(window.location.search).get("purchase");
+    const query = new URLSearchParams(window.location.search);
+    const value = query.get("purchase");
     if (!value) return;
     setPurchase(value);
+    setPaidRoute(query.get("route"));
     if (value === "success") setWaiting(true);
     window.history.replaceState({}, "", window.location.pathname);
   }, []);
@@ -184,21 +189,30 @@ function DashboardPage() {
 
   const pricesQuery = usePrices(subscriptions.map((item) => item.route));
 
-  // 沒有 pending_payment 了就代表啟用完成，停止輪詢
+  // 剛付款的那條變成 active 就收工
   useEffect(() => {
-    if (!waiting) return;
-    const stillPending = subscriptions.some(
-      (item) => item.subscription_status === "pending_payment",
-    );
-    if (!stillPending && subscriptionsQuery.isFetched) setWaiting(false);
-  }, [waiting, subscriptions, subscriptionsQuery.isFetched]);
+    if (!waiting || !subscriptionsQuery.isFetched) return;
+    const target = paidRoute
+      ? subscriptions.find((item) => item.route === paidRoute)
+      : undefined;
+    const done = paidRoute
+      ? target?.subscription_status === "active"
+      : // 舊的回跳網址沒帶航線時的退路：只要沒有卡在未完成付款的就算好了
+        !subscriptions.some((i) => i.subscription_status === "pending_payment");
+    if (done) setWaiting(false);
+  }, [waiting, paidRoute, subscriptions, subscriptionsQuery.isFetched]);
 
   // 保險：綠界真的沒送通知過來時不要無限轉圈
   useEffect(() => {
     if (!waiting) return;
-    const timer = setTimeout(() => setWaiting(false), 60_000);
+    const timer = setTimeout(() => setWaiting(false), 45_000);
     return () => clearTimeout(timer);
   }, [waiting]);
+
+  const activated = paidRoute
+    ? subscriptions.find((item) => item.route === paidRoute)
+        ?.subscription_status === "active"
+    : !subscriptions.some((i) => i.subscription_status === "pending_payment");
 
   return (
     <div className="relative min-h-screen bg-background text-foreground">
@@ -261,10 +275,17 @@ function DashboardPage() {
                   <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin" />
                   <span>付款完成，正在啟用你的訂閱…</span>
                 </>
-              ) : (
+              ) : activated ? (
                 <>
                   <Check className="mt-0.5 h-4 w-4 shrink-0" />
                   <span>訂閱已啟用，我們開始為你盯票價了。</span>
+                </>
+              ) : (
+                <>
+                  <Clock className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>
+                    付款完成，但還沒收到綠界的確認。重新整理看看，如果幾分鐘後還是沒啟用再跟我們聯絡。
+                  </span>
                 </>
               )}
             </p>

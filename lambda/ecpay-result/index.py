@@ -30,7 +30,12 @@ def handler(event, context):
     # RtnCode=1 是授權成功。其他情況（含使用者中途取消）一律導回但標記失敗，
     # 真正的狀態仍以 DynamoDB 為準，這頁只是給人看的。
     result = "success" if rtn_code == "1" else "failed"
+    # 把航線一起帶回去, 前端才知道要盯哪一張卡片變成 active
+    # （使用者可能同時有好幾條沒付款的航線）
+    route = (params.get("CustomField2") or "").strip()
     location = "%s%s?purchase=%s" % (SITE_URL, DASHBOARD_PATH, result)
+    if route:
+        location += "&route=" + urllib.parse.quote(route)
 
     return {
         "statusCode": 302,
