@@ -970,8 +970,8 @@ function RouteCard({
 
         {/* 扣款前的最後確認 —— 按下「前往付款」才會離開這個網站 */}
         {confirmingPay && (
-          <span className="flex flex-wrap items-center gap-2 text-sm">
-            <span className="text-muted-foreground">
+          <span className="flex w-full flex-wrap items-center gap-2 text-sm">
+            <span className="w-full text-muted-foreground">
               {t("card.payConfirm", { price: MONTHLY_PRICE })}
             </span>
             <button
@@ -982,7 +982,7 @@ function RouteCard({
                   targetPrice: Number(price),
                 })
               }
-              className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+              className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
             >
               {save.isPending ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -994,7 +994,7 @@ function RouteCard({
             <button
               type="button"
               onClick={() => setConfirmingPay(false)}
-              className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+              className="shrink-0 whitespace-nowrap text-sm text-muted-foreground transition-colors hover:text-foreground"
             >
               再想想
             </button>
@@ -1004,15 +1004,15 @@ function RouteCard({
         {/* active 要退訂（跟綠界取消扣款）；沒付過款的列則是單純從清單移除 */}
         {!confirmingPay &&
           (confirmingCancel ? (
-            <span className="flex items-center gap-2 text-sm">
-              <span className="text-muted-foreground">
+            <span className="flex w-full flex-wrap items-center gap-2 text-sm">
+              <span className="w-full text-muted-foreground">
                 {isActive ? t("card.confirmCancel") : t("card.confirmRemove")}
               </span>
               <button
                 type="button"
                 disabled={cancel.isPending}
                 onClick={() => cancel.mutate()}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-destructive/40 px-3 py-1.5 text-xs font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
+                className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-destructive/40 px-3 py-1.5 text-xs font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
               >
                 {cancel.isPending && <Loader2 className="h-3 w-3 animate-spin" />}
                 {t("card.confirmYes")}
@@ -1020,7 +1020,7 @@ function RouteCard({
               <button
                 type="button"
                 onClick={() => setConfirmingCancel(false)}
-                className="text-xs text-muted-foreground transition-colors hover:text-foreground"
+                className="shrink-0 whitespace-nowrap text-xs text-muted-foreground transition-colors hover:text-foreground"
               >
                 {t("card.rethink")}
               </button>
